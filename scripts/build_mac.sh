@@ -35,8 +35,10 @@
 #                 the .sdf files beside them, from a Windows machine)
 #   SSI-263       nothing: its phoneme ROM is compiled in
 #
-# What the build needs: Xcode's command line tools, CMake and Ninja. wxWidgets
-# is downloaded and built statically into build-deps/wx the first time.
+# What the build needs: Xcode's command line tools, CMake, Ninja and git.
+# wxWidgets is fetched and built statically into build-deps/wx the first time,
+# at the master commit CMakeLists.txt pins for Windows, so both platforms are
+# built on the same wxWidgets; it is built again whenever that pin moves.
 #
 # Signing uses the one "Developer ID Application" identity in the keychain,
 # or $SVS_SIGN_IDENTITY. Notarization needs either a notarytool keychain
@@ -52,7 +54,8 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 DIST=$ROOT/dist
 APP="$DIST/Singing Voice Studio.app"
-WX_VERSION=3.2.8
+# the one place the pin is written down is CMakeLists.txt
+WX_COMMIT=$(sed -n 's/.*GIT_TAG \([0-9a-f]\{40\}\).*/\1/p' CMakeLists.txt | head -n 1)
 ARCH=$(uname -m)
 MIN=${SVS_MACOS_MIN:-11.0}
 
@@ -74,23 +77,27 @@ warn() { printf '\033[33m!! %s\033[0m\n' "$*"; MISSING="$MISSING
   - $*"; }
 die() { printf '\033[31m!! %s\033[0m\n' "$*" >&2; exit 1; }
 
-for tool in cmake ninja clang curl codesign hdiutil; do
+for tool in cmake ninja clang curl git codesign hdiutil; do
     command -v $tool >/dev/null 2>&1 || die "$tool is not installed"
 done
 
-# -- 1. wxWidgets, statically, once ---------------------------------------------
+# -- 1. wxWidgets, statically, once per pin ---------------------------------------
+[ -n "$WX_COMMIT" ] || die "no wxWidgets GIT_TAG commit found in CMakeLists.txt"
 WX=$ROOT/build-deps/wx
-if [ ! -x "$WX/bin/wx-config" ]; then
-    say "building wxWidgets $WX_VERSION into build-deps/wx (once)"
+if [ ! -x "$WX/bin/wx-config" ] || [ "$(cat "$WX/.commit" 2>/dev/null)" != "$WX_COMMIT" ]; then
+    say "building wxWidgets $WX_COMMIT (master) into build-deps/wx"
     mkdir -p "$ROOT/build-deps"
     cd "$ROOT/build-deps"
-    if [ ! -d "wxWidgets-$WX_VERSION" ]; then
-        curl -sSL -o wx.tar.bz2 "https://github.com/wxWidgets/wxWidgets/releases/download/v$WX_VERSION/wxWidgets-$WX_VERSION.tar.bz2"
-        tar xjf wx.tar.bz2 && rm wx.tar.bz2
+    if [ ! -d wxWidgets/.git ]; then
+        git clone -q https://github.com/wxWidgets/wxWidgets.git wxWidgets || die "could not fetch wxWidgets"
     fi
-    mkdir -p wx-build && cd wx-build
+    git -C wxWidgets fetch -q origin "$WX_COMMIT" 2>/dev/null || git -C wxWidgets fetch -q origin
+    git -C wxWidgets checkout -q "$WX_COMMIT" || die "wxWidgets has no commit $WX_COMMIT"
+    # pcre, png, zlib, expat and the rest are submodules in a checkout
+    git -C wxWidgets submodule update -q --init --recursive || die "could not fetch wxWidgets' submodules"
+    rm -rf wx-build "$WX" && mkdir -p wx-build && cd wx-build
     # only what the program uses, every library built in, nothing from Homebrew
-    "../wxWidgets-$WX_VERSION/configure" --prefix="$WX" --disable-shared --enable-unicode \
+    "../wxWidgets/configure" --prefix="$WX" --disable-shared \
         --with-osx_cocoa --with-macosx-version-min=$MIN --disable-sys-libs \
         --with-libpng=builtin --with-libjpeg=builtin --with-libtiff=builtin --with-zlib=builtin \
         --with-expat=builtin --with-regex=builtin --without-liblzma \
@@ -99,6 +106,7 @@ if [ ! -x "$WX/bin/wx-config" ]; then
         --disable-tests > configure.log 2>&1 || die "wxWidgets did not configure: see build-deps/wx-build/configure.log"
     make -j"$(sysctl -n hw.ncpu)" > make.log 2>&1 || die "wxWidgets did not build: see build-deps/wx-build/make.log"
     make install > install.log 2>&1
+    echo "$WX_COMMIT" > "$WX/.commit"
     cd "$ROOT"
 fi
 

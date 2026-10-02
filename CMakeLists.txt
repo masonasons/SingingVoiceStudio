@@ -80,7 +80,8 @@ endforeach()
 # reader fixes made since the last release. Move the pin forward by changing
 # the commit; move to a 3.3 release tag once one has them.
 #
-# On macOS, for now, scripts/build_mac.sh builds wxWidgets 3.2 itself and it
+# On macOS scripts/build_mac.sh builds this same commit with wxWidgets' own
+# configure (reading the GIT_TAG below, so the two cannot drift apart), and it
 # is found through its wx-config.
 if(WIN32)
   include(FetchContent)
