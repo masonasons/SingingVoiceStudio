@@ -1,0 +1,12 @@
+[submodule "engine"]
+	path = engine
+	url = https://github.com/masonasons/VocalWriterC.git
+[submodule "third_party/dectalk"]
+	path = third_party/dectalk
+	url = https://github.com/dectalk/dectalk
+[submodule "third_party/ssi263-speech"]
+	path = third_party/ssi263-speech
+	url = https://github.com/tgeczy/ssi263-speech
+[submodule "third_party/ms-sam-mike-mary-decomp"]
+	path = third_party/ms-sam-mike-mary-decomp
+	url = https://github.com/KamiKitsune420/ms-sam-mike-mary-decomp

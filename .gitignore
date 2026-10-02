@@ -1,0 +1,6 @@
+build/
+build-tests/
+dist/
+assets/
+voices/
+*.wav

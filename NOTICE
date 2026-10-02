@@ -1,0 +1,32 @@
+Third-party notice
+==================
+
+The MIT licence in LICENSE covers only the work in this repository: Singing
+Voice Studio itself -- the editor, the mixer, the engine wrappers and the
+build scripts.
+
+It does not cover the synthesisers, which carry their own licences:
+
+    engine/                              VocalWriterC (github.com/masonasons/VocalWriterC)
+    third_party/dectalk/                 DECtalk (github.com/dectalk/dectalk), see its LICENCE
+    third_party/ssi263-speech/           the SSI-263 emulation (github.com/tgeczy/ssi263-speech), MIT
+    third_party/ms-sam-mike-mary-decomp/ the Microsoft TTS reconstruction
+                                         (github.com/KamiKitsune420/ms-sam-mike-mary-decomp), MIT
+    third_party/nlohmann/                nlohmann/json, MIT
+
+Nor does it cover the data the release builds carry, which this repository
+does not contain:
+
+    assets/              VocalWriter 2.0.1's tables, voice bank, wavetables and
+                         dictionary. Copyright (c) 2005 KAE Labs, all rights
+                         reserved. VocalWriter, VocalTracks and Resonant
+                         Articulatory Synthesis are their trademarks.
+    voices/microsoft/    Microsoft Sam, Mike and Mary (Sam.spd, Mike.spd,
+                         Mary.spd and their .sdf files). Copyright Microsoft
+                         Corporation.
+    voices/dectalk/      DECtalk.dll and dtalk_us.dic, built from
+                         third_party/dectalk.
+
+This is an interoperability and preservation project for speech synthesisers
+that current machines no longer run as they were. It is not affiliated with
+or endorsed by KAE Labs, Microsoft, or the owners of DECtalk.
