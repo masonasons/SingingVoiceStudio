@@ -67,10 +67,12 @@ Messages when the program starts.
 
 ## Build
 
-msys2's mingw64 GCC, CMake, Ninja and wxWidgets:
+msys2's mingw64 GCC, CMake and Ninja. wxWidgets is fetched from GitHub and built
+with the program, statically, at a pinned master commit (see CMakeLists.txt), so
+the first build takes a while longer:
 
 ```
-pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-wxwidgets3.2-msw
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
 sh build.sh
 ```
 

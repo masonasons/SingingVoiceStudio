@@ -11,6 +11,7 @@
 #include "app/widgets.h"
 #include "core/project.h"
 #include "voices/controls.h"
+#include "voices/registry.h"
 
 namespace svs {
 
@@ -162,7 +163,16 @@ private:
     void on_own_reverb(wxCommandEvent &);
 
     Studio *studio_;
-    std::vector<int> ids_;
+    void fill_voices(int select);
+    struct Engine {
+        std::string name;
+        bool available;
+        std::vector<VoiceListing> voices;
+        int last = -1;
+    };
+    std::vector<Engine> engines_;
+    wxChoice *engine_;
+    std::vector<int> ids_;      // the voices in the voice box, in order
     wxTextCtrl *name_;
     wxChoice *voice_;
     wxSpinCtrl *volume_, *pan_, *consonants_, *room_, *wet_;

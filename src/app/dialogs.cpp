@@ -623,23 +623,38 @@ TrackDialog::TrackDialog(wxWindow *parent, Studio *studio, const Track &track)
     name_ = new wxTextCtrl(this, wxID_ANY, W(track.name), wxDefaultPosition, wxSize(220, -1));
     labelled(this, outer, "Name", name_);
 
-    // Every voice of every engine: VocalWriter's bank in its own order, the
-    // people's names first and then the instruments, which sing too; then
-    // DECtalk, the SSI-263 and Microsoft's voices.
-    wxArrayString names;
-    int current = studio->track_voice_of(track), select = 0;
+    // The engine first, then its voices: VocalWriter's bank in its own order,
+    // the people's names first and then the instruments, which sing too; then
+    // DECtalk's, the SSI-263's and Microsoft's. Choosing an engine fills the
+    // voice box with that engine's voices alone, so neither list is long.
     for (const VoiceListing &v : studio->voice_list()) {
-        if (v.id == current) select = int(ids_.size());
-        ids_.push_back(v.id);
-        names.Add(W(v.available ? v.name : v.name + " (not installed)"));
+        if (engines_.empty() || engines_.back().name != v.family) engines_.push_back({v.family, v.available, {}});
+        engines_.back().voices.push_back(v);
     }
-    if (ids_.empty()) {
-        ids_.push_back(0);
-        names.Add("Robert");
-    }
-    voice_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(240, -1), names);
-    voice_->SetSelection(select);
-    labelled(this, outer, "Voice", voice_);
+    if (engines_.empty()) engines_.push_back({"VocalWriter", true, {{0, "Robert", "VocalWriter", true}}});
+    int current = studio->track_voice_of(track);
+    size_t engine = 0;
+    for (size_t e = 0; e < engines_.size(); ++e)
+        for (const VoiceListing &v : engines_[e].voices)
+            if (v.id == current) {
+                engine = e;
+                engines_[e].last = current;     // coming back to it finds it again
+            }
+    wxArrayString engine_names;
+    for (const Engine &e : engines_) engine_names.Add(W(e.available ? e.name : e.name + " (not installed)"));
+    wxBoxSizer *row = new wxBoxSizer(wxHORIZONTAL);
+    engine_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(170, -1), engine_names);
+    engine_->SetSelection(int(engine));
+    labelled(this, row, "Engine", engine_);
+    voice_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(200, -1));
+    labelled(this, row, "Voice", voice_);
+    outer->Add(row, 0, wxEXPAND);
+    fill_voices(current);
+    engine_->Bind(wxEVT_CHOICE, [this](wxCommandEvent &) { fill_voices(-1); });
+    voice_->Bind(wxEVT_CHOICE, [this](wxCommandEvent &) {
+        int i = voice_->GetSelection();
+        if (i >= 0 && i < int(ids_.size())) engines_[size_t(std::max(0, engine_->GetSelection()))].last = ids_[size_t(i)];
+    });
 
     volume_ = spin(this, 0, 100, track.volume, 80);
     labelled(this, outer, "Volume", volume_, 0, "per cent");
@@ -693,6 +708,31 @@ TrackDialog::TrackDialog(wxWindow *parent, Studio *studio, const Track &track)
     SetSizerAndFit(outer);
     name_->SetFocus();
     name_->SetInsertionPointEnd();
+}
+
+//: The voice box for the engine chosen, with `select` chosen in it if it is
+//: one of its voices, and otherwise the voice last chosen from this engine
+//: while the dialog has been open, or its first.
+void TrackDialog::fill_voices(int select) {
+    int e = std::max(0, engine_->GetSelection());
+    Engine &engine = engines_[size_t(e)];
+    if (select < 0) select = engine.last;
+    voice_->Clear();
+    ids_.clear();
+    int at = 0;
+    for (const VoiceListing &v : engine.voices) {
+        // The engine's name is in the box beside it, so it is not said again:
+        // "Betty" rather than "DECtalk Betty". A voice that is nothing but the
+        // engine's name -- the SSI-263's own -- keeps it.
+        std::string name = v.name;
+        std::string prefix = engine.name + " ";
+        if (name.size() > prefix.size() && name.compare(0, prefix.size(), prefix) == 0)
+            name = name.substr(prefix.size());
+        if (v.id == select) at = int(ids_.size());
+        ids_.push_back(v.id);
+        voice_->Append(W(name));
+    }
+    voice_->SetSelection(at);
 }
 
 void TrackDialog::on_own_voice(wxCommandEvent &) {

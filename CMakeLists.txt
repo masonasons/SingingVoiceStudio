@@ -73,21 +73,49 @@ foreach(eng ${SVS_ENGINES})
   endif()
 endforeach()
 
-# -- wxWidgets, statically ---------------------------------------------------
+# -- wxWidgets, statically, at a master commit ------------------------------
+#
+# Built from source as part of this build rather than taken from a package,
+# as FastPlay does: the 3.3 line at a master commit, which carries the screen
+# reader fixes made since the last release. Move the pin forward by changing
+# the commit; move to a 3.3 release tag once one has them.
+#
+# On macOS, for now, scripts/build_mac.sh builds wxWidgets 3.2 itself and it
+# is found through its wx-config.
 if(WIN32)
-  find_program(SH_EXE sh)
-  find_program(WX_CONFIG wx-config)
-  if(NOT WX_CONFIG)
-    message(FATAL_ERROR "wx-config not found: install mingw-w64-x86_64-wxwidgets3.2-msw")
-  endif()
-  execute_process(COMMAND ${SH_EXE} ${WX_CONFIG} --static=yes --cxxflags
-                  OUTPUT_VARIABLE WX_CXXFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(COMMAND ${SH_EXE} ${WX_CONFIG} --static=yes --libs core,base
-                  OUTPUT_VARIABLE WX_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
-  separate_arguments(WX_CXXFLAGS NATIVE_COMMAND "${WX_CXXFLAGS}")
-  # the one library wx-config names as a DLL has a static twin beside it
-  string(REGEX REPLACE "[^ ]*liblzma\\.dll\\.a" "-l:liblzma.a" WX_LIBS "${WX_LIBS}")
-  separate_arguments(WX_LIBS NATIVE_COMMAND "${WX_LIBS}")
+  include(FetchContent)
+  set(FETCHCONTENT_QUIET OFF)
+  set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Floor for old dependencies")
+  FetchContent_Declare(wxWidgets
+      GIT_REPOSITORY https://github.com/wxWidgets/wxWidgets.git
+      GIT_TAG e320e82ec94df7ff5bb85b73344407190ce1d4f6     # master, 2026-10-01
+      GIT_SHALLOW FALSE
+  )
+  set(wxBUILD_SHARED OFF CACHE INTERNAL "")
+  set(wxBUILD_USE_STATIC_RUNTIME ON CACHE INTERNAL "")
+  set(wxBUILD_TESTS OFF CACHE INTERNAL "")
+  set(wxBUILD_SAMPLES OFF CACHE INTERNAL "")
+  set(wxBUILD_DEMOS OFF CACHE INTERNAL "")
+  set(wxBUILD_PRECOMP ON CACHE INTERNAL "")
+  set(wxBUILD_INSTALL OFF CACHE INTERNAL "")
+  set(wxUSE_STL ON CACHE INTERNAL "")
+  # What the screen reader support stands on; on by default for Windows, and
+  # said here so that it cannot quietly go away.
+  set(wxUSE_ACCESSIBILITY ON CACHE INTERNAL "")
+  # The program uses core and base; the rest of wxWidgets is most of the build
+  # for code that is never called.
+  set(wxUSE_STC OFF CACHE INTERNAL "")
+  set(wxUSE_WEBVIEW OFF CACHE INTERNAL "")
+  set(wxUSE_MEDIACTRL OFF CACHE INTERNAL "")
+  set(wxUSE_RICHTEXT OFF CACHE INTERNAL "")
+  set(wxUSE_PROPGRID OFF CACHE INTERNAL "")
+  set(wxUSE_RIBBON OFF CACHE INTERNAL "")
+  set(wxUSE_AUI OFF CACHE INTERNAL "")
+  set(wxUSE_XRC OFF CACHE INTERNAL "")
+  set(wxUSE_LIBJPEG OFF CACHE INTERNAL "")
+  set(wxUSE_LIBTIFF OFF CACHE INTERNAL "")
+  set(wxUSE_LIBWEBP OFF CACHE INTERNAL "")
+  FetchContent_MakeAvailable(wxWidgets)
 else()
   # scripts/build_mac.sh builds a static wxWidgets into build-deps/wx; one
   # installed elsewhere can be named with -DWX_CONFIG=<path to wx-config>.
@@ -175,10 +203,8 @@ function(svs_executable name console)
   else()
     add_executable(${name} ${APP_SOURCES})
   endif()
-  target_compile_options(${name} PRIVATE ${WX_CXXFLAGS})
-  target_link_libraries(${name} PRIVATE svs_core ${WX_LIBS})
   if(WIN32)
-    target_link_libraries(${name} PRIVATE uiautomationcore)
+    target_link_libraries(${name} PRIVATE svs_core wx::core wx::base)
     target_link_options(${name} PRIVATE -static -static-libgcc -static-libstdc++)
     if(console)
       target_compile_definitions(${name} PRIVATE SVS_CONSOLE=1)
@@ -186,6 +212,8 @@ function(svs_executable name console)
       target_link_options(${name} PRIVATE -mwindows)
     endif()
   elseif(APPLE)
+    target_compile_options(${name} PRIVATE ${WX_CXXFLAGS})
+    target_link_libraries(${name} PRIVATE svs_core ${WX_LIBS})
     target_link_libraries(${name} PRIVATE "-framework AppKit")
     if(console)
       target_compile_definitions(${name} PRIVATE SVS_CONSOLE=1)

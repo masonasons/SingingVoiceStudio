@@ -7,6 +7,8 @@
 #include <map>
 #include <stdexcept>
 
+#include <wx/version.h>
+
 #include "audio/mixer.h"
 #include "core/paths.h"
 #include "core/project.h"
@@ -290,6 +292,8 @@ int run_cli(const CliArgs &args) {
     }
     if (args.version) {
         out(std::string("Singing Voice Studio, built ") + __DATE__);
+        out(std::string("wxWidgets ") + std::to_string(wxMAJOR_VERSION) + "." + std::to_string(wxMINOR_VERSION) +
+            "." + std::to_string(wxRELEASE_NUMBER));
         for (const std::string &line : Registry::get().status()) out(line);
         return 0;
     }

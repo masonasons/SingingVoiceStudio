@@ -5,3 +5,5 @@
 /voices/
 *.wav
 /build-deps/
+/build-wx/
+build-wx.log
