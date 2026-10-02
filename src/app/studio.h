@@ -175,6 +175,7 @@ private:
     bool record(const Snapshot &before, const Snapshot &after, const std::string &label);
     void history_status();
     void on_update_history(wxUpdateUIEvent &evt);
+    void relabel_history();
     void restore_history(bool redo);
     void reset_history(bool saved_now);
 
@@ -224,6 +225,9 @@ private:
     wxMenuItem *mi_play_ = nullptr;
     wxMenuItem *mi_metronome_ = nullptr;
     wxMenuItem *mi_auto_preview_ = nullptr;
+    wxMenuItem *mi_undo_ = nullptr;
+    wxMenuItem *mi_redo_ = nullptr;
+    bool relabel_pending_ = false;
 };
 
 }  // namespace svs

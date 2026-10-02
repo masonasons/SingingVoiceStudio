@@ -290,8 +290,8 @@ void Studio::build_menu() {
     help->Append(ID_KEYS, K("&Keys\tF1"), "List the shortcuts in Messages");
 
     wxMenu *edit = new wxMenu();
-    edit->Append(wxID_UNDO, K("&Undo\tCtrl+Z"), "Undo the last song edit");
-    edit->Append(wxID_REDO, K("&Redo\tCtrl+Shift+Z"), "Redo the last undone edit");
+    mi_undo_ = edit->Append(wxID_UNDO, K("&Undo\tCtrl+Z"), "Undo the last song edit");
+    mi_redo_ = edit->Append(wxID_REDO, K("&Redo\tCtrl+Shift+Z"), "Redo the last undone edit");
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { restore_history(false); }, wxID_UNDO);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { restore_history(true); }, wxID_REDO);
     Bind(wxEVT_UPDATE_UI, &Studio::on_update_history, this, wxID_UNDO);
@@ -1404,12 +1404,31 @@ bool Studio::record(const Snapshot &before, const Snapshot &after, const std::st
 
 void Studio::history_status() { touch(song_fingerprint(song_) != saved_); }
 
+//: Undo and Redo are available when there is something to undo -- and only
+//: that is said here. On macOS this runs while AppKit searches the menus for
+//: the item a key press belongs to (wxWidgets answers menuNeedsUpdate and
+//: validateMenuItem by running it), and changing a label there resets the
+//: item's key equivalent mid-search, which crashed the program now and then
+//: on the first shortcut after an edit. The labels are set by
+//: relabel_history, afterwards.
 void Studio::on_update_history(wxUpdateUIEvent &evt) {
     bool undo = evt.GetId() == wxID_UNDO;
-    const auto &entries = undo ? undo_ : redo_;
-    evt.Enable(!entries.empty());
-    evt.SetText(W(std::string(undo ? "Undo" : "Redo") + (entries.empty() ? "" : " " + entries.back().label) +
-                  "\t" + (undo ? "Ctrl+Z" : "Ctrl+Shift+Z")));
+    evt.Enable(!(undo ? undo_ : redo_).empty());
+}
+
+//: Name the next undo and redo on the Edit menu.
+void Studio::relabel_history() {
+    relabel_pending_ = false;
+    for (bool undo : {true, false}) {
+        wxMenuItem *item = undo ? mi_undo_ : mi_redo_;
+        if (!item) continue;
+        const auto &entries = undo ? undo_ : redo_;
+        std::string label = std::string(undo ? "Undo" : "Redo") +
+                            (entries.empty() ? "" : " " + entries.back().label) + "\t" +
+                            (undo ? "Ctrl+Z" : "Ctrl+Shift+Z");
+        wxString text = K(label.c_str());
+        if (item->GetItemLabel() != text) item->SetItemLabel(text);
+    }
 }
 
 void Studio::restore_history(bool redo) {
@@ -1444,6 +1463,11 @@ void Studio::reset_history(bool saved_now) {
 //: Note that the song has changed, and show it in the title.
 void Studio::touch(bool dirty) {
     dirty_ = dirty;
+    // renamed after the event that changed it has finished, never during it
+    if (!relabel_pending_) {
+        relabel_pending_ = true;
+        CallAfter([this] { relabel_history(); });
+    }
     std::string name = path_.empty() ? "Untitled" : base_name(path_);
     SetTitle(W((dirty ? "*" : "") + name + " - " + kAppName));
     keep_a_copy();
