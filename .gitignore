@@ -1,6 +1,6 @@
-build/
-build-tests/
-dist/
-assets/
-voices/
+/build/
+/build-tests/
+/dist/
+/assets/
+/voices/
 *.wav
