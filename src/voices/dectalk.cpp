@@ -10,49 +10,71 @@
 // dtalk_us.dic in voices\dectalk. The dictionary is only for reading text,
 // which nothing here does, but DECtalk will not start without it.
 //
-// DECtalk sings from phonemes: in its phoneme mode every phoneme can carry a
-// length and a pitch, "aa<400,262>". Everything below follows from how the
-// engine treats those two numbers, measured on this build:
+// DECtalk sings the way its own songs are written (the reference guide's
+// "Happy Birthday", samplosf\src\data\birthday.txt): in phoneme mode, one
+// phoneme for each sound, each with a length in milliseconds and a note of
+// DECtalk's scale, "dey<600,10>". Notes 1 to 37 are C2 to C5. A clause sung
+// in notes is in DECtalk's singing mode, and DECtalk does the rest itself:
+// each new note is reached by a straight glide over 100 ms from the start
+// of the phoneme that asks for it, and every note carries DECtalk's own
+// vibrato, 6.3 Hz and +-2.05 Hz whatever the note (so deep on low notes and
+// slight on high ones). That glide and that vibrato are what DECtalk singing
+// sounds like, so they are left to DECtalk: a vowel is one phoneme however
+// long the note, a diphthong is DECtalk's own diphthong, and the pitch is
+// never steered from here. Everything below follows from how the engine
+// treats the two numbers, measured on this build:
 //
 //   Lengths are counted in frames of 71 samples at 11025 Hz (6.44 ms; the
 //   engine's own arithmetic says 6.4). A length of n ms becomes
 //   ((n + 4) * 10) >> 6 frames, and the phonemes follow one another frame
 //   for frame, so asking for the right number of frames for each puts every
 //   phoneme where it belongs, to the nearest frame, however long the phrase.
+//   A note number on a phoneme takes effect at the phoneme's first frame.
 //
-//   A pitch of 38 or more is a frequency in whole hertz. The pitch moves in a
-//   straight line from the previous phoneme's target to this one's over the
-//   phoneme and then holds. (1 to 37 are notes of DECtalk's own scale, with a
-//   built-in vibrato of a few hertz; a clause cannot mix the two, and the
-//   scale is not used.) What comes out is not exactly the hertz asked for:
-//   the period is kept in steps of a quarter of a 10 kHz sample, truncated,
-//   then rescaled to 11025 Hz and rounded to quarter samples again, so the
-//   pitch sung for H is 44100 / ((18063 * floor(400000 / (10 H)) + 8192) >> 14).
-//   That was checked against every H from 48 to 520. The program inverts it,
-//   choosing the H whose pitch is nearest the one wanted. Every note of the
-//   equal-tempered scale from G#1 to B4 then comes out within 10 cents (most
-//   within 5); between notes, as a vibrato or a bend passes, the nearest
-//   pitch can be up to 18 cents off at the ends of the range. The range is
-//   50 to 512.8 Hz, G1 to a little under C5: a phrase that goes outside it
-//   is sung whole octaves up or down, and what still does not fit is held
-//   at the edge.
+//   The scale is DECtalk's table of notes (notetab), retuned when DECtalk is
+//   built (scripts/build_dectalk.ps1 says how; scripts/build_dectalk_mac.sh
+//   does the same on macOS): every note from C2 to C5 comes out within about
+//   a cent of equal temperament at A = 440 Hz, as an average over its
+//   vibrato, but A4 (+4 cents) and B4 (+6), where the pitches DECtalk's
+//   pitch period can make are too far apart. A phrase that
+//   goes outside C2 to C5 is sung whole octaves up or down, and what still
+//   does not fit is sung on the nearest end of the scale. The voices make no
+//   difference to the pitch of a note.
 //
-// Pitch that moves inside a note -- vibrato, a bend, a glide -- is followed
-// by cutting the vowel into consecutive copies of itself, each with its own
-// target, so that the straight lines between targets trace the curve to
-// within a few cents. DECtalk carries a vowel across copies of itself
-// without a seam, provided each copy is stressed (an unstressed vowel is
-// sung 4 dB softer). Diphthongs cannot be cut that way -- each copy would
-// glide again -- and DECtalk's own long diphthongs spend most of their time
-// on the second vowel, so a long diphthong is sung as a singer sings it: the
-// first vowel held, and the diphthong itself only at the end.
+// So the song's own vibrato controls and the mod wheel do not reach DECtalk:
+// its vibrato cannot be changed or turned off in singing mode, and it is
+// kept, at vibrato 0 too, because it is the DECtalk sound. Nor do pitch bends
+// and detune, but as whole semitones. DECtalk will mix notes with targets in
+// hertz (which slide straight from one target to the next over a phoneme,
+// with no vibrato) only in a clause that starts with a target in hertz, and
+// such a clause is not in singing mode: it loses the 4190/4096 that brings
+// DECtalk's scale to concert pitch, and it cannot go above 512 Hz, a
+// little under C5. A note in hertz would also slide across its whole vowel
+// rather than bend inside it. So a bend is followed only as far as DECtalk's
+// scale can: each phoneme takes the semitone nearest the bent pitch at its
+// start (after any portamento has arrived), and a new note number is sent
+// where that changes. A bend held by whole semitones is sung exactly, with
+// DECtalk's glide into it; a bend that moves inside a vowel, or one smaller
+// than half a semitone, is not heard.
 //
-// A clause holds about 150 such pieces; beyond that DECtalk forces a comma
-// and a pause into the singing. So a long phrase is rendered in chunks, each
-// with some of the phrase before and after it, and the chunks are joined
-// where the singing is silent or unvoiced if there is such a place (the
-// closure of a stop, best), with a short crossfade, lined up on the glottal
-// pulses if the join has to fall in a vowel.
+// VocalWriter's phonemes are DECtalk's nearly one for one (the table below).
+// Every vowel, and syllabic l and n, is stressed, as a sung syllable is: an
+// unstressed vowel is sung 4 dB softer, and DECtalk's rules for unstressed
+// syllables (flapping a t, for one) would change what was written. A vowel
+// followed by r in the same note is sung as DECtalk's r-coloured vowel with
+// the time of both (DECtalk folds such an r into the vowel itself, and drops
+// its time); an r after a vowel that no vowel follows is DECtalk's
+// postvocalic r. What DECtalk sings was checked against what it was sent
+// with its own phoneme log (tests/engines/dectalk).
+//
+// A clause holds about 290 symbols (a phoneme, and a stress mark) and 200
+// phonemes; beyond that DECtalk forces a comma and a pause into the singing.
+// So a long phrase is rendered in chunks, each with some of the phrase before
+// and after it, and the chunks are joined where the singing is silent or
+// unvoiced if there is such a place (the closure of a stop, best), with a
+// short crossfade, lined up on the glottal pulses if the join has to fall in
+// a voiced sound. Each chunk's leading silence is made just long enough that
+// its vibrato is in step with the chunk before.
 //
 // Wendy is DECtalk's whispering voice, and whispers her songs.
 
@@ -144,52 +166,38 @@ constexpr double kFrameSeconds = double(kFrame) / kDtRate;
 //: it takes ((ms + 4) * 10) >> 6, so ms + 4 must be ceil(6.4 * frames).
 int ms_for_frames(int frames) { return (64 * frames + 9) / 10 - 4; }
 
-//: The pitch DECtalk sings for a target of `hz` (see the top of the file).
-double sung_hz(int hz) {
-    int f0 = std::max(500, std::min(5121, hz * 10));
-    long t0 = 400000L / f0;
-    long q = (18063L * t0 + 8192L) >> 14;
-    return 44100.0 / double(q);
-}
-const double kLowestHz = 50.0;
-const double kHighestHz = 44100.0 / 86.0;    //: 512.8, what 508 to 512 give
+//: DECtalk's scale: note 1 is C2, MIDI 36, and note 37 is C5, MIDI 72.
+constexpr int kNoteBase = 35;
+constexpr int kLowestNote = 1, kHighestNote = 37;
+double note_hz(int note) { return 440.0 * std::pow(2.0, (note + kNoteBase - 69) / 12.0); }
 
-//: The whole hertz whose sung pitch is nearest `hz`.
-int target_for(double hz) {
-    hz = std::max(kLowestHz, std::min(kHighestHz, hz));
-    int lo = std::max(50, int(std::floor(hz)) - 4), hi = std::min(512, int(std::ceil(hz)) + 4);
-    int best = lo;
-    double err = 1e9;
-    for (int h = lo; h <= hi; ++h) {
-        double e = std::fabs(std::log(sung_hz(h) / hz));
-        if (e < err) {
-            err = e;
-            best = h;
-        }
-    }
-    return best;
-}
+//: The note numbers go on the first phoneme of each note, and on any later
+//: one whose pitch differs (a bend). That starts DECtalk's glide where the
+//: note starts. (Putting the number on every phoneme restarts the glide at
+//: each, slower each time, so a note that starts with consonants arrives
+//: late; putting it on the vowel only, as DECtalk's own songs mostly do,
+//: starts the glide at the vowel, after the consonants. Both were measured,
+//: in tests/engines/dectalk.)
+enum class NoteOn { kNoteStart, kEveryPhoneme, kVowel };
+constexpr NoteOn kNoteOn = NoteOn::kNoteStart;
 
-// The pieces a vowel is cut into: no shorter than three frames (19 ms), no
-// longer than forty (a quarter of a second), and placed so that the pitch
-// between their targets stays within a few cents of the curve.
-constexpr int kMinPiece = 3;
-constexpr int kMaxPiece = 40;
-constexpr double kPieceCents = 5.0;
-//: Anything longer is cut anyway, voiced or not, to keep every length well
-//: inside what the engine can count.
-constexpr int kMaxUnit = 150;
-//: A diphthong shorter than this is sung whole; a longer one holds its
-//: first vowel and ends on the diphthong, which takes this share of it.
-constexpr int kHoldDiphthong = 30;
-constexpr double kGlideShare = 0.35;
-constexpr int kGlideMin = 15, kGlideMax = 23;
+//: Longer than this, a phoneme is sent as several copies of itself, which
+//: keeps its length inside what the engine counts in 16 bits (32767 ms).
+//: Nothing sung is ever near it.
+constexpr int kMaxUnit = 4000;
 
-// A chunk: at most this many symbols (a stressed vowel is two), well under
-// the 300 a clause has room for.
-constexpr int kChunkSymbols = 220;
-//: Silence before each chunk, cut off afterwards, and after it.
-constexpr int kLeadFrames = 8;
+// A chunk: at most this many symbols and phonemes, under the 290 and 200 a
+// clause has room for.
+constexpr int kChunkSymbols = 240;
+constexpr int kChunkPhonemes = 170;
+//: Silence before each chunk, cut off afterwards: long enough for DECtalk's
+//: 100 ms glide from wherever its pitch was to the first note, and up to a
+//: vibrato cycle more to bring the vibrato into step (see vibrato_lead).
+constexpr int kLeadFrames = 20;
+//: The vibrato advances 165/4096 of a cycle a frame (ph_drwt01.c,
+//: linear_interp), from nought at the start of each render.
+constexpr int kVibratoStep = 165, kVibratoCycle = 4096;
+//: Silence after each chunk.
 constexpr int kTailFrames = 8;
 //: Every render but the first after DECtalk starts begins one frame later
 //: than asked (the synthesiser hands back a frame of the render before),
@@ -205,92 +213,99 @@ constexpr int kPreRoll = 20;
 
 enum Kind {
     kSilence,      //: _
-    kVowel,        //: held by repeating it, stressed
-    kSonorant,     //: voiced and steady, held by repeating it (m, n, l, ...)
-    kVoiced,       //: voiced, not repeated (v, z, b, d, ...)
+    kVowel,        //: a vowel, or syllabic l or n
+    kSonorant,     //: voiced and steady (m, n, l, w, r, y)
+    kVoiced,       //: voiced (v, z, dh, zh, the flap)
     kStop,         //: has a closure, a good place for a join (p, t, k, ch, ...)
-    kUnvoiced,     //: noise (s, f, sh, ...)
+    kUnvoiced,     //: noise (s, f, sh, h, ...)
 };
 
 struct DtPhone {
     const char *vw;
-    const char *hold;    //: what is repeated to hold it
-    const char *glide;   //: a diphthong: what it ends on, if long (else null)
-    const char *onset;   //: YU: what it begins with, if long (else null)
+    const char *dt;        //: DECtalk's phoneme
     Kind kind;
     bool stress;
+    //: a vowel: what it and an r after it in the same note are sung as
+    //: (null: the vowel, then DECtalk's postvocalic r)
+    const char *with_r;
 };
 
-// VocalWriter's fifty-seven phonemes in DECtalk's arpabet: what holds each,
-// the diphthong a long one ends on or (YU) starts with, its kind, and whether
-// it takes stress. DECtalk's symbols, from include\usa_phon.tab: iy ih ey eh
-// ae aa ay aw ah ao ow oy uh uw rr yu ax ix ir er ar or ur, w yx r ll hx rx
-// lx, m n nx el dz en, f v th dh s z sh zh, p b t d k g dx tx q ch jh.
-// VocalWriter's allophones of t that DECtalk also has (TX, Q, DD) keep their
-// own symbols; QX, a longer glottal stop, is DECtalk's q held longer. Stress
-// goes on vowels and on syllabic l and n; on any other consonant DECtalk
-// loses some of its length.
+// VocalWriter's fifty-seven phonemes in DECtalk's arpabet, from
+// include\usa_phon.tab: iy ih ey eh ae aa ay aw ah ao ow oy uh uw rr yu ax ix
+// ir er ar or ur, w yx r ll hx rx lx, m n nx el en, f v th dh s z sh zh, p b
+// t d k g dx tx q ch jh. They are written in full (yx, not y; ll, not l):
+// DECtalk reads a one-letter abbreviation it does not know as text. The
+// diphthongs (ey ay oy aw ow yu) and the r-coloured vowels (ir er ar or ur,
+// and rr) are DECtalk's own, sung whole, long or short; held long, DECtalk's
+// diphthong reaches its second vowel within about a third of a second and
+// holds that, as DECtalk's own long notes do.
+//
+// The r-coloured forms of vowel + r are VocalWriter's own (phonology.cpp,
+// allophones: UX and AX + r are ER, EH + r is XR), with DECtalk's rule for
+// the vowels VocalWriter has none for (EY, AE + r are er; OW + r is or).
+// VocalWriter's O, bOy's first part, is DECtalk's ow: the start of DECtalk's
+// oy is nearest ow (by its first two formants), and DECtalk's ow, unlike its
+// ay or ey, drifts only a little. QX, a longer glottal stop, is q held
+// longer. DECtalk dips the pitch for a glottal stop (q, and tx), as it does
+// when it speaks.
 const DtPhone kPhones[] = {
-    {"IY", "iy", nullptr, nullptr, kVowel, true},
-    {"IH", "ih", nullptr, nullptr, kVowel, true},
-    {"EH", "eh", nullptr, nullptr, kVowel, true},
-    {"AE", "ae", nullptr, nullptr, kVowel, true},
-    {"AA", "aa", nullptr, nullptr, kVowel, true},
-    {"UX", "ah", nullptr, nullptr, kVowel, true},     // bUd
-    {"AO", "ao", nullptr, nullptr, kVowel, true},
-    {"UH", "uh", nullptr, nullptr, kVowel, true},
-    {"AX", "ax", nullptr, nullptr, kVowel, true},
-    {"ER", "rr", nullptr, nullptr, kVowel, true},     // bIRd: DECtalk's r-coloured vowel
-    // The diphthongs hold the vowel DECtalk's own diphthong starts from
-    // (measured by its formants) and end on the diphthong.
-    {"EY", "eh", "ey", nullptr, kVowel, true},
-    {"AY", "aa", "ay", nullptr, kVowel, true},
-    {"OY", "ow", "oy", nullptr, kVowel, true},        // oy starts nearer ow than ao
-    {"AW", "aa", "aw", nullptr, kVowel, true},
-    {"OW", "ow", nullptr, nullptr, kVowel, true},     // repeated ow only drifts a little
-    {"UW", "uw", nullptr, nullptr, kVowel, true},
-    {"YU", "uw", nullptr, "yu", kVowel, true},        // mUte: the glide is at the start
-    // The r-coloured vowels: the vowel held, the r at the end.
-    {"IR", "iy", "ir", nullptr, kVowel, true},        // bEER
-    {"XR", "eh", "er", nullptr, kVowel, true},        // bEAR (DECtalk's er is "air")
-    {"AR", "aa", "ar", nullptr, kVowel, true},
-    {"OR", "ow", "or", nullptr, kVowel, true},        // or starts close to ow
-    {"UR", "uw", "ur", nullptr, kVowel, true},
-    {"IX", "ix", nullptr, nullptr, kVowel, true},
-    {"%", "_", nullptr, nullptr, kSilence, false},
-    {"RX", "rr", nullptr, nullptr, kVowel, true},     // a short r-coloured vowel
-    {"LX", "lx", nullptr, nullptr, kSonorant, false},
-    {"EL", "el", nullptr, nullptr, kSonorant, true},  // syllabic: takes stress
-    {"EN", "en", nullptr, nullptr, kSonorant, true},
-    {"w", "w", nullptr, nullptr, kSonorant, false},
-    {"y", "yx", nullptr, nullptr, kSonorant, false},
-    {"r", "r", nullptr, nullptr, kSonorant, false},   // rx after a vowel, see below
-    {"l", "ll", nullptr, nullptr, kSonorant, false},
-    {"h", "hx", nullptr, nullptr, kUnvoiced, false},
-    {"m", "m", nullptr, nullptr, kSonorant, false},
-    {"n", "n", nullptr, nullptr, kSonorant, false},
-    {"NG", "nx", nullptr, nullptr, kSonorant, false},
-    {"f", "f", nullptr, nullptr, kUnvoiced, false},
-    {"v", "v", nullptr, nullptr, kVoiced, false},
-    {"TH", "th", nullptr, nullptr, kUnvoiced, false},
-    {"DH", "dh", nullptr, nullptr, kVoiced, false},
-    {"s", "s", nullptr, nullptr, kUnvoiced, false},
-    {"z", "z", nullptr, nullptr, kVoiced, false},
-    {"SH", "sh", nullptr, nullptr, kUnvoiced, false},
-    {"ZH", "zh", nullptr, nullptr, kVoiced, false},
-    {"p", "p", nullptr, nullptr, kStop, false},
-    {"b", "b", nullptr, nullptr, kStop, false},
-    {"t", "t", nullptr, nullptr, kStop, false},
-    {"d", "d", nullptr, nullptr, kStop, false},
-    {"k", "k", nullptr, nullptr, kStop, false},
-    {"g", "g", nullptr, nullptr, kStop, false},
-    {"CH", "ch", nullptr, nullptr, kStop, false},
-    {"JH", "jh", nullptr, nullptr, kStop, false},
-    {"TX", "tx", nullptr, nullptr, kStop, false},     // the t of "it"
-    {"Q", "q", nullptr, nullptr, kStop, false},       // glottal stop
-    {"QX", "q", nullptr, nullptr, kStop, false},      // a longer one
-    {"DD", "dx", nullptr, nullptr, kVoiced, false},   // flap, beTTer
-    {"O", "ow", nullptr, nullptr, kVowel, true},      // bOy's first part
+    {"IY", "iy", kVowel, true, "ir"},
+    {"IH", "ih", kVowel, true, "ir"},
+    {"EH", "eh", kVowel, true, "er"},
+    {"AE", "ae", kVowel, true, "er"},
+    {"AA", "aa", kVowel, true, "ar"},
+    {"UX", "ah", kVowel, true, "rr"},      // bUd
+    {"AO", "ao", kVowel, true, "or"},
+    {"UH", "uh", kVowel, true, "ur"},
+    {"AX", "ax", kVowel, true, "rr"},
+    {"ER", "rr", kVowel, true, "rr"},      // bIRd
+    {"EY", "ey", kVowel, true, "er"},
+    {"AY", "ay", kVowel, true, nullptr},
+    {"OY", "oy", kVowel, true, nullptr},
+    {"AW", "aw", kVowel, true, nullptr},
+    {"OW", "ow", kVowel, true, "or"},
+    {"UW", "uw", kVowel, true, "ur"},
+    {"YU", "yu", kVowel, true, nullptr},   // mUte
+    {"IR", "ir", kVowel, true, "ir"},      // bEER
+    {"XR", "er", kVowel, true, "er"},      // bEAR (DECtalk's er is "air")
+    {"AR", "ar", kVowel, true, "ar"},
+    {"OR", "or", kVowel, true, "or"},
+    {"UR", "ur", kVowel, true, "ur"},      // pOOR
+    {"IX", "ix", kVowel, true, nullptr},
+    {"%", "_", kSilence, false, nullptr},
+    {"RX", "rr", kVowel, true, "rr"},      // a short r-coloured vowel
+    {"LX", "lx", kSonorant, false, nullptr},
+    {"EL", "el", kVowel, true, nullptr},   // syllabic: takes stress
+    {"EN", "en", kVowel, true, nullptr},
+    {"w", "w", kSonorant, false, nullptr},
+    {"y", "yx", kSonorant, false, nullptr},
+    {"r", "r", kSonorant, false, nullptr},   // rx after a vowel, see Plan::shape
+    {"l", "ll", kSonorant, false, nullptr},  // DECtalk makes it lx after a vowel
+    {"h", "hx", kUnvoiced, false, nullptr},
+    {"m", "m", kSonorant, false, nullptr},
+    {"n", "n", kSonorant, false, nullptr},
+    {"NG", "nx", kSonorant, false, nullptr},
+    {"f", "f", kUnvoiced, false, nullptr},
+    {"v", "v", kVoiced, false, nullptr},
+    {"TH", "th", kUnvoiced, false, nullptr},
+    {"DH", "dh", kVoiced, false, nullptr},
+    {"s", "s", kUnvoiced, false, nullptr},
+    {"z", "z", kVoiced, false, nullptr},
+    {"SH", "sh", kUnvoiced, false, nullptr},
+    {"ZH", "zh", kVoiced, false, nullptr},
+    {"p", "p", kStop, false, nullptr},
+    {"b", "b", kStop, false, nullptr},
+    {"t", "t", kStop, false, nullptr},
+    {"d", "d", kStop, false, nullptr},
+    {"k", "k", kStop, false, nullptr},
+    {"g", "g", kStop, false, nullptr},
+    {"CH", "ch", kStop, false, nullptr},
+    {"JH", "jh", kStop, false, nullptr},
+    {"TX", "tx", kStop, false, nullptr},     // the t of "it"
+    {"Q", "q", kStop, false, nullptr},       // glottal stop
+    {"QX", "q", kStop, false, nullptr},      // a longer one
+    {"DD", "dx", kVoiced, false, nullptr},   // flap, beTTer
+    {"O", "ow", kVowel, true, "or"},         // bOy's first part
 };
 
 const DtPhone *dt_phone(const std::string &vw) {
@@ -401,17 +416,23 @@ private:
 #else
         const char *lib_name = "libtts.so";
 #endif
-        const std::string folder = data_name("voices\\dectalk");
+        // the folder as this platform writes it, for a message (as
+        // core/paths.h's data_name writes it, where there is one)
+#ifdef _WIN32
+        const std::string folder = "voices\\dectalk";
+#else
+        const std::string folder = "voices/dectalk";
+#endif
         std::string dir = find_data("voices\\dectalk");
         std::string dll = join_path(dir, lib_name);
         std::string dic = join_path(dir, "dtalk_us.dic");
         if (!file_exists(dll)) {
             // beside the program, or on macOS in the bundle's Frameworks
-            std::vector<std::string> near{join_path(exe_dir(), lib_name)};
+            std::vector<std::string> nearby{join_path(exe_dir(), lib_name)};
 #ifdef __APPLE__
-            near.push_back(join_path(exe_dir(), std::string("../Frameworks/") + lib_name));
+            nearby.push_back(join_path(exe_dir(), std::string("../Frameworks/") + lib_name));
 #endif
-            for (const std::string &beside : near) {
+            for (const std::string &beside : nearby) {
                 if (!file_exists(beside)) continue;
                 dll = beside;
                 if (!file_exists(dic)) dic = join_path(exe_dir(), "dtalk_us.dic");
@@ -561,50 +582,52 @@ struct Voice {
 // Harry, Dennis, Rita and Val) then go past full scale inside DECtalk, which
 // clips. Each voice's loudness (g5, the gain into its first formant, in dB)
 // is set so that the loudest vowels on the highest notes peak at about
-// -3 dB: 6 dB under DECtalk's own for Paul, 9 for Harry, a few or none for
-// the others. The gains after it even the voices out: each was sung through
-// ten vowels on notes across its range at full velocity and scaled so that
-// its median peak is 0.5, as the SSI-263's are. Wendy whispers.
+// -1.5 dB (0.74 to 0.86 of full scale, nothing clipped): 6 dB under
+// DECtalk's own for Paul, 9 for Harry, a few or none for the others. The
+// gains after it even the voices out: each was sung through ten vowels on
+// notes across its range at full velocity and scaled so that its median
+// peak is 0.5, as the SSI-263's are. Wendy whispers.
 const Voice kVoices[10] = {
-    {"Paul", "[:np][:dv g5 80]", 1.34},   {"Betty", "[:nb][:dv g5 78]", 1.37},
-    {"Harry", "[:nh][:dv g5 72]", 1.67},  {"Frank", "[:nf][:dv g5 84]", 1.27},
-    {"Dennis", "[:nd][:dv g5 80]", 1.01}, {"Kit", "[:nk][:dv g5 70]", 1.17},
-    {"Ursula", "[:nu][:dv g5 79]", 1.29}, {"Rita", "[:nr][:dv g5 76]", 1.15},
-    {"Wendy", "[:nw][:dv g5 82]", 1.04},  {"Val", "[:nv][:dv g5 80]", 1.33},
+    {"Paul", "[:np][:dv g5 80]", 1.24},   {"Betty", "[:nb][:dv g5 78]", 1.21},
+    {"Harry", "[:nh][:dv g5 72]", 1.56},  {"Frank", "[:nf][:dv g5 84]", 1.15},
+    {"Dennis", "[:nd][:dv g5 80]", 0.92}, {"Kit", "[:nk][:dv g5 70]", 1.10},
+    {"Ursula", "[:nu][:dv g5 79]", 1.19}, {"Rita", "[:nr][:dv g5 76]", 1.13},
+    {"Wendy", "[:nw][:dv g5 82]", 1.09},  {"Val", "[:nv][:dv g5 80]", 1.24},
 };
 
 // -- turning a phrase into what DECtalk is sent ------------------------------
 
-//: One phoneme as sent: its symbol, how many frames, and its pitch target.
+//: One phoneme as sent: its symbol, how many frames, and its note.
 struct Unit {
     std::string sym;
     bool stress = false;
     Kind kind = kSilence;
     int start = 0;          //: frame, from the start of the phrase
     int frames = 1;
-    double cents = 0.0;     //: the pitch it should end on, cents above MIDI 0
-    int hz = 100;           //: the target DECtalk is given for that
+    int note = 0;           //: the note number sent with it, or 0 for none
+    int sung = 1;           //: the note in force while it sounds
     //: joins are best made in silence, then in a stop, then in noise, and
-    //: only then in the middle of a held vowel
+    //: only then at the start of a voiced sound
     int join_cost = 9;
 };
 
-double cents_to_hz(double c) { return 440.0 * std::pow(2.0, (c - 6900.0) / 1200.0); }
-double hz_to_cents(double hz) { return 6900.0 + 1200.0 * std::log2(hz / 440.0); }
-
-//: A VocalWriter phoneme with its place in time, in frames.
+//: A VocalWriter phoneme with its place in time, in frames, and what it is
+//: sung as.
 struct Placed {
     const DtPhone *ph;
+    std::string sym;
     int start, end;
     size_t note;
+    double midi = 60.0;     //: the pitch it is sung at, before any octave shift
 };
 
 class Plan {
 public:
     Plan(const Phrase &phrase, const PitchCurve &curve) : phrase_(phrase), curve_(curve) {
-        choose_octave();
         place();
-        sample_curve();
+        shape();
+        pitch();
+        choose_octave();
         build();
     }
 
@@ -613,71 +636,9 @@ public:
     int octave_shift() const { return shift_; }
     bool clamped() const { return clamped_; }
 
-    //: Where the pitch curve wants the voice at frame boundary `f`, in
-    //: cents, after any octave shift and held inside DECtalk's range;
-    //: `before` takes the value just before it (the end of a phoneme rather
-    //: than the start of the next, which matters where a note changes).
-    double cents_at(int f, bool before = false) const {
-        f = std::max(0, std::min(total_frames_, f));
-        return before ? before_[size_t(f)] : at_[size_t(f)];
-    }
-
 private:
-    // The pitch at frame boundary `f` as the note being built sees it. The
-    // phonemes' boundaries are on frames and the notes' are not, so near the
-    // end of a note "the end of this phoneme" can lie a fraction of a frame
-    // inside the next note; the time is kept inside the note.
-    double pitch(int f) const {
-        double t = f * kFrameSeconds;
-        double a = curve_.note_start(note_), b = curve_.note_end(note_) - 1e-6;
-        if (t >= a && t <= b && f >= 0 && f <= total_frames_) return at_[size_t(f)];
-        return curve_cents(std::max(a, std::min(b, t)));
-    }
-
-    double curve_cents(double t) const {
-        t = std::max(0.0, std::min(curve_.total() - 1e-6, t));
-        double c = 100.0 * curve_.midi_at(t) + 1200.0 * shift_;
-        return std::max(hz_to_cents(kLowestHz), std::min(hz_to_cents(kHighestHz), c));
-    }
-
-    void sample_curve() {
-        at_.resize(size_t(total_frames_) + 1);
-        before_.resize(size_t(total_frames_) + 1);
-        for (int f = 0; f <= total_frames_; ++f) {
-            at_[size_t(f)] = curve_cents(f * kFrameSeconds);
-            before_[size_t(f)] = curve_cents(f * kFrameSeconds - 1e-6);
-        }
-    }
-
-    // DECtalk sings from 50 to 512.8 Hz. A phrase that goes outside that is
-    // moved by whole octaves until it fits, or fits as nearly as it can, so
-    // that the tune stays the tune; whatever is still outside is held at
-    // the edge.
-    void choose_octave() {
-        double lo = 1e9, hi = -1e9;
-        for (size_t i = 0; i < phrase_.notes.size(); ++i) {
-            const SungNote &n = phrase_.notes[i];
-            bool rest = n.phonemes.empty() || (n.phonemes.size() == 1 && n.phonemes[0] == kRest);
-            if (rest) continue;
-            double a = curve_.note_start(i), b = curve_.note_end(i);
-            for (double t = a; t < b; t += 0.01) {
-                double m = curve_.steady_midi_at(t);
-                lo = std::min(lo, m);
-                hi = std::max(hi, m);
-            }
-        }
-        if (lo > hi) return;
-        double top = hz_to_cents(kHighestHz) / 100.0, bottom = hz_to_cents(kLowestHz) / 100.0;
-        // How far outside the range the phrase is when moved k octaves,
-        // forgiving half a semitone: a C5 is better sung 35 cents flat than
-        // two octaves down.
-        auto out_by = [&](int k) {
-            return std::max(0.0, hi + 12.0 * k - top - 0.5) +
-                   std::max(0.0, bottom - 0.5 - (lo + 12.0 * k));
-        };
-        while (out_by(shift_ - 1) < out_by(shift_)) --shift_;
-        while (out_by(shift_ + 1) < out_by(shift_)) ++shift_;
-        clamped_ = hi + 12.0 * shift_ > top + 0.01 || lo + 12.0 * shift_ < bottom - 0.01;
+    static bool is_rest(const SungNote &n) {
+        return n.phonemes.empty() || (n.phonemes.size() == 1 && n.phonemes[0] == kRest);
     }
 
     // Every phoneme at its place: each note's phonemes take the note's time
@@ -710,7 +671,8 @@ private:
                 double t1 = k + 1 == syms.size() ? b : t + std::max(0.0, ms[k]) * scale / 1000.0;
                 int f0 = at;
                 int f1 = std::max(f0 + 1, frame_of(t1));
-                placed_.push_back({ph, f0, f1, i});
+                Placed p{ph, ph->dt, f0, f1, i};
+                placed_.push_back(p);
                 at = f1;
                 t = t1;
             }
@@ -718,94 +680,126 @@ private:
         total_frames_ = std::max(at, frame_of(curve_.total()));
     }
 
-    void add(const char *sym, bool stress, Kind kind, int start, int frames, int cost) {
-        Unit u;
-        u.sym = sym;
-        u.stress = stress;
-        u.kind = kind;
-        u.start = start;
-        u.frames = frames;
-        u.join_cost = cost;
-        u.cents = pitch(start + frames);
-        u.hz = target_for(cents_to_hz(u.cents));
-        units_.push_back(u);
+    // An r after a vowel. In the same note, with no vowel after it in the
+    // note, it and the vowel are one r-coloured vowel, as DECtalk itself
+    // would make them -- but DECtalk would also drop the r's time, so it is
+    // done here, with the time of both. Otherwise an r after a vowel that no
+    // vowel follows is DECtalk's postvocalic rx, which keeps its time.
+    void shape() {
+        std::vector<Placed> out;
+        for (size_t k = 0; k < placed_.size(); ++k) {
+            Placed p = placed_[k];
+            if (std::string(p.ph->vw) == "r" && !out.empty() && out.back().ph->kind == kVowel) {
+                Placed &v = out.back();
+                bool vowel_next = k + 1 < placed_.size() && placed_[k + 1].ph->kind == kVowel;
+                bool vowel_next_in_note = vowel_next && placed_[k + 1].note == p.note;
+                if (v.note == p.note && !vowel_next_in_note && v.ph->with_r) {
+                    v.sym = v.ph->with_r;
+                    v.end = p.end;
+                    continue;
+                }
+                if (!vowel_next) p.sym = "rx";
+            }
+            out.push_back(p);
+        }
+        placed_.swap(out);
     }
 
-    // Cut [a, b) into pieces of `sym` whose straight lines from target to
-    // target follow the pitch curve, each as long as it can be while doing
-    // so. `from` is the target the pitch arrives from.
-    void hold(const char *sym, bool stress, Kind kind, int a, int b, double from) {
-        int s = a;
-        double v = from;
-        while (s < b) {
-            int best = b - s <= kMinPiece ? b : s + kMinPiece;
-            for (int e = std::min(b, s + kMaxPiece); e > s + kMinPiece; --e) {
-                double target = pitch(e);
-                bool ok = true;
-                for (int f = s + 1; f < e && ok; ++f) {
-                    double line = v + (target - v) * double(f - s) / double(e - s);
-                    ok = std::fabs(line - pitch(f)) <= kPieceCents;
-                }
-                if (ok) {
-                    best = e;
-                    break;
-                }
-            }
-            // never leave a sliver at the end
-            if (b - best > 0 && b - best < kMinPiece) best = b - s <= kMaxPiece ? b : b - kMinPiece;
-            add(sym, stress, kind, s, best - s, best == b ? 4 : 3);
-            v = units_.back().cents;
-            s = best;
+    // The pitch of each phoneme: the curve without its vibrato (DECtalk has
+    // its own) where the phoneme starts, or, if portamento is set, where the
+    // glide it asks for has arrived (DECtalk glides by itself).
+    void pitch() {
+        const double glide = portamento_seconds(phrase_.style.portamento);
+        for (Placed &p : placed_) {
+            double a = curve_.note_start(p.note), b = curve_.note_end(p.note) - 1e-6;
+            double t = p.start * kFrameSeconds;
+            t = std::max(t, a + glide);
+            t = std::max(a, std::min(b, t));
+            p.midi = curve_.steady_midi_at(t);
         }
+    }
+
+    // DECtalk sings from C2 to C5. A phrase that goes outside that is moved
+    // by whole octaves until it fits, or fits as nearly as it can, so that
+    // the tune stays the tune; whatever is still outside is sung at the end
+    // of the scale.
+    void choose_octave() {
+        int lo = INT_MAX, hi = INT_MIN;
+        for (const Placed &p : placed_) {
+            if (is_rest(phrase_.notes[p.note])) continue;
+            int m = int(std::lround(p.midi));
+            lo = std::min(lo, m);
+            hi = std::max(hi, m);
+        }
+        if (lo > hi) return;
+        const int top = kHighestNote + kNoteBase, bottom = kLowestNote + kNoteBase;
+        auto out_by = [&](int k) {
+            return std::max(0, hi + 12 * k - top) + std::max(0, bottom - (lo + 12 * k));
+        };
+        while (out_by(shift_ - 1) < out_by(shift_)) --shift_;
+        while (out_by(shift_ + 1) < out_by(shift_)) ++shift_;
+        clamped_ = out_by(shift_) > 0;
+    }
+
+    int number(const Placed &p) const {
+        int n = int(std::lround(p.midi)) + 12 * shift_ - kNoteBase;
+        return std::max(kLowestNote, std::min(kHighestNote, n));
     }
 
     void build() {
-        double prev = cents_at(0);
+        int sent = 0;
         for (size_t k = 0; k < placed_.size(); ++k) {
             const Placed &p = placed_[k];
             const DtPhone *ph = p.ph;
-            note_ = p.note;
-            int n = p.end - p.start;
-            bool prev_vowel = k > 0 && placed_[k - 1].ph->kind == kVowel;
-            bool next_vowel = k + 1 < placed_.size() && placed_[k + 1].ph->kind == kVowel;
-            const char *sym = ph->hold;
-            // DECtalk folds an r that follows a vowel into the vowel, and
-            // drops its time, unless a vowel follows; its postvocalic r is rx.
-            if (std::string(ph->vw) == "r" && prev_vowel && !next_vowel) sym = "rx";
-            if (ph->kind == kVowel || ph->kind == kSonorant) {
-                const char *whole = ph->glide ? ph->glide : ph->onset;
-                if (whole && n < kHoldDiphthong) {
-                    // short: the diphthong itself, its pitch sliding across it
-                    add(whole, ph->stress, ph->kind, p.start, n, 5);
-                } else if (ph->glide) {
-                    int g = std::max(kGlideMin, std::min(kGlideMax, int(std::lround(n * kGlideShare))));
-                    hold(sym, ph->stress, ph->kind, p.start, p.end - g, prev);
-                    add(ph->glide, ph->stress, ph->kind, p.end - g, g, 5);
-                } else if (ph->onset) {
-                    int g = std::max(12, std::min(20, int(std::lround(n * 0.3))));
-                    add(ph->onset, ph->stress, ph->kind, p.start, g, 5);
-                    hold(sym, ph->stress, ph->kind, p.start + g, p.end, units_.back().cents);
-                } else {
-                    hold(sym, ph->stress, ph->kind, p.start, p.end, prev);
+            bool first = k == 0 || placed_[k - 1].note != p.note;
+            int n = number(p);
+            bool send = false;
+            switch (kNoteOn) {
+            case NoteOn::kNoteStart: send = first || n != sent; break;
+            case NoteOn::kEveryPhoneme: send = true; break;
+            case NoteOn::kVowel: {
+                // the note's vowel, or its first phoneme if it has none
+                bool nucleus = ph->kind == kVowel;
+                if (!nucleus && first) {
+                    nucleus = true;
+                    for (size_t j = k; j < placed_.size() && placed_[j].note == p.note; ++j)
+                        if (placed_[j].ph->kind == kVowel) nucleus = false;
                 }
-            } else {
-                // Not held: one phoneme (or more if very long), ending on
-                // where the curve is at its end.
-                int cost = ph->kind == kSilence ? 0 : ph->kind == kStop ? 1 : ph->kind == kUnvoiced ? 2 : 9;
-                for (int s = p.start; s < p.end; s += kMaxUnit)
-                    add(sym, false, ph->kind, s, std::min(p.end, s + kMaxUnit) - s, cost);
+                send = nucleus && n != sent;
+                break;
             }
-            if (!units_.empty()) prev = units_.back().cents;
+            }
+            if (send) sent = n;
+            int cost = ph->kind == kSilence ? 0 : ph->kind == kStop ? 1 : ph->kind == kUnvoiced ? 2 : 9;
+            for (int s = p.start; s < p.end; s += kMaxUnit) {
+                Unit u;
+                u.sym = p.sym;
+                u.stress = ph->stress;
+                u.kind = ph->kind;
+                u.start = s;
+                u.frames = std::min(p.end, s + kMaxUnit) - s;
+                u.note = send && s == p.start ? n : 0;
+                u.sung = sent;
+                u.join_cost = cost;
+                units_.push_back(u);
+            }
         }
+        // whatever comes before the first note number is sung on it
+        int first = 0;
+        for (const Unit &u : units_)
+            if (u.sung) {
+                first = u.sung;
+                break;
+            }
+        for (Unit &u : units_)
+            if (!u.sung) u.sung = first ? first : 1;
     }
 
     const Phrase &phrase_;
     const PitchCurve &curve_;
     std::vector<Placed> placed_;
     std::vector<Unit> units_;
-    std::vector<double> at_, before_;
     int total_frames_ = 0;
-    size_t note_ = 0;
     int shift_ = 0;
     bool clamped_ = false;
 };
@@ -815,6 +809,7 @@ struct Chunk {
     size_t first = 0, last = 0;   //: units [first, last) rendered
     int join_in = 0;              //: the frame it takes over from the chunk before
     int join_out = 0;             //: the frame it hands over at (or the end)
+    int lead = kLeadFrames;       //: its leading silence, in frames
 };
 
 int symbols(const Unit &u) { return u.stress ? 2 : 1; }
@@ -829,9 +824,12 @@ std::vector<Chunk> plan_chunks(const std::vector<Unit> &u, int total_frames) {
         Chunk c;
         c.first = first;
         c.join_in = join_in;
-        int count = 0;
+        int count = 0, phonemes = 0;
         size_t m = first;
-        while (m < u.size() && count + symbols(u[m]) <= kChunkSymbols - 16) count += symbols(u[m++]);
+        while (m < u.size() && count + symbols(u[m]) <= kChunkSymbols && phonemes < kChunkPhonemes) {
+            count += symbols(u[m++]);
+            ++phonemes;
+        }
         if (m >= u.size()) {
             c.last = u.size();
             c.join_out = total_frames;
@@ -839,7 +837,7 @@ std::vector<Chunk> plan_chunks(const std::vector<Unit> &u, int total_frames) {
             break;
         }
         // The best place for the join among the later units that fit, at
-        // least one full unit and the pre-roll past the last join.
+        // least the pre-roll past the last join.
         size_t lo = first + (m - first) / 2;
         long best_score = -1;
         size_t best_unit = m - 1;
@@ -870,27 +868,46 @@ std::vector<Chunk> plan_chunks(const std::vector<Unit> &u, int total_frames) {
         first = next;
         join_in = best_frame;
     }
+    // DECtalk's vibrato starts from nought with each render, so each chunk's
+    // leading silence is lengthened, by up to a cycle, until the vibrato
+    // under its units is where the first chunk's would have been.
+    const int origin = out[0].lead - u[out[0].first].start;
+    for (size_t ci = 1; ci < out.size(); ++ci) {
+        Chunk &c = out[ci];
+        int best = kLeadFrames, err = INT_MAX;
+        for (int lead = kLeadFrames; lead < kLeadFrames + 26; ++lead) {
+            int d = (lead - u[c.first].start - origin) * kVibratoStep;
+            d = ((d % kVibratoCycle) + kVibratoCycle) % kVibratoCycle;
+            d = std::min(d, kVibratoCycle - d);
+            if (d < err) {
+                err = d;
+                best = lead;
+            }
+        }
+        c.lead = best;
+    }
     return out;
 }
 
-std::string chunk_text(const std::vector<Unit> &u, const Chunk &c, const char *voice,
-                       double lead_cents) {
+std::string chunk_text(const std::vector<Unit> &u, const Chunk &c, const char *voice) {
     std::string s = "[:phoneme arpabet speak on]";
     s += voice;
-    s += "[_<" + std::to_string(ms_for_frames(kLeadFrames)) + "," +
-         std::to_string(target_for(cents_to_hz(lead_cents))) + ">";
+    s += "[_<" + std::to_string(ms_for_frames(c.lead)) + "," + std::to_string(u[c.first].sung) + ">";
     for (size_t k = c.first; k < c.last; ++k) {
         if (u[k].stress) s += "'";
         s += u[k].sym;
-        s += "<" + std::to_string(ms_for_frames(u[k].frames)) + "," + std::to_string(u[k].hz) + ">";
+        s += "<" + std::to_string(ms_for_frames(u[k].frames));
+        if (u[k].note) s += "," + std::to_string(u[k].note);
+        s += ">";
     }
-    int last_hz = c.last > c.first ? u[c.last - 1].hz : 100;
-    s += "_<" + std::to_string(ms_for_frames(kTailFrames)) + "," + std::to_string(last_hz) + ">]";
+    s += "_<" + std::to_string(ms_for_frames(kTailFrames)) + ">]";
     return s;
 }
 
 // SVS_DECTALK_TRACE=1 in the environment reports each phrase's chunks on
-// stderr; 2 also shows what DECtalk is sent.
+// stderr; 2 also shows what DECtalk is sent. SVS_DECTALK_TEXT names a file
+// that every clause sent is added to, a line each (the engine's test reads
+// it back through DECtalk's phoneme log).
 int tracing() {
     static int t = -1;
     if (t < 0) {
@@ -898,6 +915,15 @@ int tracing() {
         t = e ? std::atoi(e) : 0;
     }
     return t;
+}
+
+void keep_text(const std::string &text) {
+    const char *path = std::getenv("SVS_DECTALK_TEXT");
+    if (!path || !*path) return;
+    if (FILE *f = std::fopen(path, "a")) {
+        std::fprintf(f, "%s\n", text.c_str());
+        std::fclose(f);
+    }
 }
 
 // The look-ahead limiter the SSI-263 uses: the gain each sample needs to stay
@@ -989,32 +1015,43 @@ public:
         std::vector<Rendered> parts(chunks.size());
         for (size_t ci = 0; ci < chunks.size(); ++ci) {
             const Chunk &c = chunks[ci];
-            double lead = c.first > 0 ? u[c.first - 1].cents : u[0].cents;
-            std::string text = chunk_text(u, c, voice_.code, lead);
-            int frames = kLeadFrames + kRenderDelay + kTailFrames;
+            std::string text = chunk_text(u, c, voice_.code);
+            keep_text(text);
+            int frames = c.lead + kRenderDelay + kTailFrames;
             for (size_t k = c.first; k < c.last; ++k) frames += u[k].frames;
             std::string err;
             bool ok = engine.render(text, size_t(frames) * kFrame, &parts[ci].samples, &err);
             if (tracing() > 1) std::fprintf(stderr, "%s\n", text.c_str());
-            if (tracing())
+            if (tracing()) {
+                size_t full = 0;
+                for (int16_t v : parts[ci].samples) full += v >= 32767 || v <= -32768;
                 std::fprintf(stderr, "[dectalk] chunk %zu: units %zu-%zu, joins at frames %d and %d, "
-                             "%d frames asked for, %.1f came%s%s\n",
-                             ci, c.first, c.last, c.join_in, c.join_out, frames,
-                             parts[ci].samples.size() / double(kFrame), ok ? "" : "; ", err.c_str());
+                             "lead %d, %d frames asked for, %.1f came, %zu samples at full scale%s%s\n",
+                             ci, c.first, c.last, c.join_in, c.join_out, c.lead, frames,
+                             parts[ci].samples.size() / double(kFrame), full, ok ? "" : "; ",
+                             err.c_str());
+            }
             // Every frame asked for must have come (DECtalk adds a little
             // silence of its own at the end of a clause).
             if (!ok || parts[ci].samples.size() < size_t(frames) * kFrame) sung.stopped_short = true;
-            // It always comes back 13 frames longer (the clause's own end);
-            // anything else means DECtalk changed a length it was given.
-            if (tracing() && ok && parts[ci].samples.size() != size_t(frames + 13) * kFrame)
-                std::fprintf(stderr, "[dectalk] chunk %zu came back %+.1f frames from the usual\n", ci,
-                             parts[ci].samples.size() / double(kFrame) - (frames + 13));
-            // The chunk's first unit is kLeadFrames (and the frame every
-            // render is late by) into what came back.
-            parts[ci].offset = long(u[c.first].start - kLeadFrames - kRenderDelay) * kFrame;
+            // It comes back 13 frames longer (the clause's own end), and 4
+            // more when the last phoneme is a stop, which DECtalk releases
+            // into a short vowel before a pause; anything else means DECtalk
+            // changed a length it was given.
+            if (tracing() && ok) {
+                long extra = long(parts[ci].samples.size()) - long(frames + 13) * kFrame;
+                if (extra != 0 && extra != 4L * kFrame)
+                    std::fprintf(stderr, "[dectalk] chunk %zu came back %+.1f frames from the usual\n", ci,
+                                 extra / double(kFrame));
+            }
+            // The chunk's first unit is its lead (and the frame every render
+            // is late by) into what came back.
+            parts[ci].offset = long(u[c.first].start - c.lead - kRenderDelay) * kFrame;
             if (ci > 0) {
                 long at = long(c.join_in) * kFrame;
-                long shift = align(parts[ci - 1], parts[ci], at, cents_to_hz(plan.cents_at(c.join_in)));
+                size_t k = c.first;
+                while (k + 1 < c.last && u[k + 1].start <= c.join_in) ++k;
+                long shift = align(parts[ci - 1], parts[ci], at, note_hz(u[k].sung));
                 parts[ci].offset += shift;
                 if (tracing() && shift)
                     std::fprintf(stderr, "[dectalk] chunk %zu moved %ld samples to meet the one before\n", ci, shift);

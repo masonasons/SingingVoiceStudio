@@ -1,7 +1,8 @@
 # DECtalk on its own: a console program that lists the voices, says whether
-# DECtalk.dll and its dictionary are there, and if they are, sings a short
-# tune in a few voices to WAV files and reports how well the timing and the
-# pitch came out.
+# DECtalk.dll and its dictionary are there, and if they are, sings a few
+# tunes in a few voices to WAV files, reports how well the timing and the
+# pitch came out, compares the singing with DECtalk's own "Happy Birthday",
+# and checks with DECtalk's phoneme log that it sang what it was sent.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\build_dectalk.ps1
 #   cmake -G Ninja -S tests/engines/dectalk -B build-tests/dectalk

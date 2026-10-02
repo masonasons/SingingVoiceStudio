@@ -47,6 +47,31 @@ sed -i '' 's/UINT16 uFlags, HANDLE16 hDev,/UINT16 uFlags, HWAVEOUT hDev,/' "$DAP
 # before it takes the name the program hands it; the note is nothing
 sed -i '' 's|fprintf(stderr,"libtts.so: Using default dictionary name\\n");|;|' "$DAPI/lts/lsw_main.c"
 
+# DECtalk's scale retuned to A = 440 Hz, as scripts/build_dectalk.ps1 does to
+# the Windows DLL (it explains the values: they are the ones whose sung pitch,
+# through DECtalk's own pitch arithmetic and averaged over its vibrato, is
+# nearest each equal-tempered note). Here they are written into the copy of
+# ph/ph_romi.c before it is compiled; the table must be there exactly once,
+# with DECtalk's original values (or these, if the copy is already retuned).
+perl -0777 -pi -e '
+    my @orig = qw(640 678 718 761 806 854 905 959 1016 1076 1140 1208 1280 1356 1437
+                  1522 1613 1709 1810 1918 2032 2152 2280 2416 2560 2712 2874 3044 3226
+                  3418 3620 3836 4064 4304 4560 4832 5120);
+    my @tuned = qw(640 678 718 761 806 853 904 958 1015 1075 1139 1206 1278 1353 1434
+                   1519 1610 1704 1804 1913 2028 2146 2274 2407 2554 2704 2860 3026 3212
+                   3411 3601 3812 4049 4277 4540 4808 5092);
+    my $n = () = /const short notetab\[\]\s*=\s*\{[^}]*\}/g;
+    die "notetab is in ph_romi.c $n times, not once\n" unless $n == 1;
+    s#(const short notetab\[\]\s*=\s*\{)([^}]*)(\})#
+        my ($head, $body, $tail) = ($1, $2, $3);
+        $body =~ s{/\*.*?\*/}{}gs;
+        my @v = $body =~ /(\d+)/g;
+        die "notetab in ph_romi.c is not the table DECtalk came with\n"
+            unless "@v" eq "@orig" or "@v" eq "@tuned";
+        $head . "\n\t" . join(",\n\t", @tuned) . "\n" . $tail
+    #e;
+' "$DAPI/ph/ph_romi.c"
+
 # lsw_main.c includes config.h, which autotools would have made; it only needs
 # to exist (DECTALK_INSTALL_PREFIX has a fallback in dectalkf.h)
 if [ ! -f "$WORK/src/config.h" ]; then
