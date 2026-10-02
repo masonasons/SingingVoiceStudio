@@ -78,7 +78,7 @@ private:
     void on_keys(wxCommandEvent &);
 
     // -- engine answers ---------------------------------------------------
-    void ready();
+    void ready(const std::vector<std::string> &lines);
     void set_voices(std::vector<VoiceListing> v);
     void set_program_map(const std::vector<int> &picks);
 
@@ -204,6 +204,7 @@ private:
     int current_ = 0;
     bool switching_ = false;
     std::vector<VoiceListing> voices_;
+    std::vector<std::string> status_lines_;   // what each engine said at the start
     std::map<int, int> program_map_;
     std::string wav_, preview_wav_;
     Player player_;

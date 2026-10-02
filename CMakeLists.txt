@@ -183,6 +183,7 @@ set(APP_SOURCES
   src/app/dialogs.cpp
   src/app/widgets.cpp
   src/app/worker.cpp
+  src/app/crash.cpp
 )
 if(APPLE)
   list(APPEND APP_SOURCES src/app/announce_mac.mm)
@@ -206,6 +207,9 @@ function(svs_executable name console)
   if(WIN32)
     target_link_libraries(${name} PRIVATE svs_core wx::core wx::base)
     target_link_options(${name} PRIVATE -static -static-libgcc -static-libstdc++)
+    # where every function landed, so that a crash report's module+offset
+    # lines can be traced to code (see src/app/crash.h)
+    target_link_options(${name} PRIVATE -Wl,-Map=${CMAKE_BINARY_DIR}/${name}.map)
     if(console)
       target_compile_definitions(${name} PRIVATE SVS_CONSOLE=1)
     else()

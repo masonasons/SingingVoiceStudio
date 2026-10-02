@@ -9,12 +9,14 @@
 // not, so the one inside the bundle does both, and svs beside it is the same
 // program under a shorter name.
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
 #include <wx/wx.h>
 
 #include "app/cli.h"
+#include "app/crash.h"
 #include "app/studio.h"
 #include "app/widgets.h"
 #include "core/paths.h"
@@ -83,6 +85,12 @@ private:
 }  // namespace
 
 int main(int argc, char **argv) {
+    svs::install_crash_reporter();
+    // a deliberate crash, to check that a report is written
+    if (const char *t = std::getenv("SVS_CRASH_TEST"); t && *t == '1') {
+        volatile int *nothing = nullptr;
+        *nothing = 1;
+    }
     svs::CliArgs args = svs::parse_args(arguments(argc, argv));
     if (svs::wants_console(args)) {
         bool heard = attach_console();

@@ -222,6 +222,17 @@ if (-not $NoZip) {
     Say "wrote $zip ($mb MB)"
 }
 
+# The linker maps of this very build, kept beside the zip (not in it): a crash
+# report names addresses, and only these maps turn them into functions.
+#   python scripts\resolve_crash.py crash-....txt dist\maps-<date>\SingingVoiceStudio.map
+$maps = Join-Path $Dist ("maps-" + (Get-Date -Format "yyyy-MM-dd"))
+New-Item -ItemType Directory -Force $maps | Out-Null
+foreach ($m in @("SingingVoiceStudio.map", "svs.map")) {
+    $src = Join-Path $Root "build\$m"
+    if (Test-Path $src) { Copy-Item -Force $src (Join-Path $maps $m) }
+}
+Say "kept the linker maps in $maps, for reading crash reports"
+
 if ($missing.Count) {
     Write-Host ""
     Write-Host "Built, but without everything:" -ForegroundColor Yellow

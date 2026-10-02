@@ -13,6 +13,7 @@
 #include <wx/textdlg.h>
 
 #include "app/announce.h"
+#include "app/crash.h"
 #include "app/dialogs.h"
 #include "core/paths.h"
 #include "voices/controls.h"
@@ -144,13 +145,14 @@ Studio::Studio(const std::string &path)
     Bind(wxEVT_TIMER, [this](wxTimerEvent &) { write_copy(); }, ID_RECOVERY_TIMER);
 
     // The engines answer in order, so the cheap things are asked for first.
-    worker_->ask<std::vector<std::string>>([] { return Registry::get().status(); },
-                                           [this](std::vector<std::string> lines) {
-                                               (void)lines;
-                                               ready();
-                                           });
     worker_->ask<std::vector<VoiceListing>>([] { return Registry::get().voices(); },
                                             [this](std::vector<VoiceListing> v) { set_voices(v); });
+    // Everything that asks the engines whether they can sing is asked here,
+    // on the engines' own thread, and the answers kept: the window never asks
+    // an engine anything itself, so it can never be caught waiting on one
+    // that is in the middle of singing.
+    worker_->ask<std::vector<std::string>>([] { return Registry::get().status(); },
+                                           [this](std::vector<std::string> lines) { ready(lines); });
     worker_->ask<std::vector<int>>([] { return vocalwriter_program_voices(); },
                                    [this](std::vector<int> picks) { set_program_map(picks); });
     Bind(wxEVT_CLOSE_WINDOW, &Studio::on_close, this);
@@ -472,6 +474,7 @@ void Studio::on_keys(wxCommandEvent &) {
 }
 
 void Studio::say(const wxString &text) {
+    crash_note(U(text));
     status_->SetStatusText(text);
     messages_->AppendText(text + "\n");
 }
@@ -483,12 +486,15 @@ void Studio::announce_note(const wxString &text, ReportList *control, int row) {
     reannounce(control, row);
 }
 
-void Studio::ready() {
-    auto voices = Registry::get().voices();
+void Studio::ready(const std::vector<std::string> &lines) {
+    status_lines_ = lines;
     size_t ready_count = 0;
-    for (const auto &v : voices) ready_count += v.available ? 1 : 0;
+    for (const auto &v : voices_) ready_count += v.available ? 1 : 0;
     say(W("engines ready, " + std::to_string(ready_count) + " voices"));
-    for (const std::string &line : Registry::get().status()) say(W(line));
+    for (const std::string &line : lines) say(W(line));
+    for (const std::string &report : unseen_crash_reports())
+        say(W("the program crashed last time, and wrote down where: " + report +
+              ". Sending that file along with what you were doing will help find it."));
     say(W("this is build " + build_stamp()));
     VwAssets &a = VwAssets::get();
     if (a.ok() && !a.has_bank())
@@ -665,10 +671,12 @@ void Studio::on_track_edit(wxCommandEvent &) {
         reannounce(tracks_list_, i);
         say(W(t.name + ", " + voice_name(track_voice_of(t)) + ", volume " + std::to_string(t.volume) + "%, " +
               pan_text(t.pan) + ", " + (t.voice ? "its own voice controls" : "the song's voice controls")));
-        // a voice that cannot sing here is worth saying at once, not at Play
-        Family *f = Registry::get().family_of(track_voice_of(t));
-        std::string why;
-        if (f && !f->available(&why)) say(W(why));
+        // a voice that cannot sing here is worth saying at once, not at Play --
+        // from what the engines said at the start, not by asking one now
+        for (const VoiceListing &v : voices_)
+            if (v.id == track_voice_of(t) && !v.available)
+                for (const std::string &line : status_lines_)
+                    if (line.compare(0, v.family.size() + 1, v.family + ":") == 0) say(W(line));
     });
 }
 
