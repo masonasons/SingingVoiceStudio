@@ -342,9 +342,9 @@ public:
             if (file_exists(spd_path(d, v))) return true;
         if (why)
             *why = "Microsoft Sam, Mike and Mary need Microsoft's voice files, Sam.spd, "
-                   "Mike.spd or Mary.spd, in voices\\microsoft (" + d + "). They come with "
-                   "Windows XP and the SAPI 5.1 runtime, in Program Files\\Common Files\\"
-                   "Microsoft Shared\\Speech.";
+                   "Mike.spd or Mary.spd, in " + data_name("voices\\microsoft") + " (" + d +
+                   "). They come with Windows XP and the SAPI 5.1 runtime, in Program Files\\"
+                   "Common Files\\Microsoft Shared\\Speech.";
         return false;
     }
 
@@ -393,7 +393,8 @@ private:
         if (!file_exists(path) || !read_file(path, &bytes)) {
             if (err)
                 *err = std::string("Microsoft ") + kVoiceNames[v] + "'s voice file, " +
-                       kVoiceNames[v] + ".spd, is not in voices\\microsoft (" + d + ").";
+                       kVoiceNames[v] + ".spd, is not in " + data_name("voices\\microsoft") + " (" + d +
+                       ").";
             return nullptr;
         }
         char msg[256] = {0};

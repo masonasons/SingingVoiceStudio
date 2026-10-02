@@ -1,5 +1,6 @@
 #!/bin/sh
 # Build Singing Voice Studio with msys2's mingw64 GCC, CMake and Ninja.
+# (On macOS use scripts/build_mac.sh instead.)
 #
 #   sh build.sh              everything, into build/
 #   sh build.sh clean        start again

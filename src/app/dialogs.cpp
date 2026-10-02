@@ -107,11 +107,11 @@ AddWordDialog::AddWordDialog(wxWindow *parent, Studio *studio, int pitch, double
     list_->InsertColumn(0, "Phonemes", wxLIST_FORMAT_LEFT, 165);
     list_->InsertColumn(1, "Pitch", wxLIST_FORMAT_LEFT, 55);
     list_->InsertColumn(2, "Beats", wxLIST_FORMAT_LEFT, 150);
-    list_->Bind(wxEVT_LIST_ITEM_ACTIVATED, [this](wxListEvent &) {
+    list_->OnActivated([this] {
         wxCommandEvent e;
         on_edit(e);
     });
-    list_->Bind(wxEVT_KEY_DOWN, &AddWordDialog::on_key, this);
+    list_->OnKey([this](wxKeyEvent &e) { on_key(e); });
     caption(this, outer, "Notes for this word", list_);
 
     outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
@@ -339,11 +339,11 @@ CurveDialog::CurveDialog(wxWindow *parent, Studio *studio, const Note &note, con
     list_ = new ReportList(this, wxLC_REPORT | wxLC_SINGLE_SEL, wxSize(340, 170));
     list_->InsertColumn(0, "Position", wxLIST_FORMAT_LEFT, 150);
     list_->InsertColumn(1, kind.value_label, wxLIST_FORMAT_LEFT, 150);
-    list_->Bind(wxEVT_LIST_ITEM_ACTIVATED, [this](wxListEvent &) {
+    list_->OnActivated([this] {
         wxCommandEvent e;
         on_edit(e);
     });
-    list_->Bind(wxEVT_KEY_DOWN, &CurveDialog::on_key, this);
+    list_->OnKey([this](wxKeyEvent &e) { on_key(e); });
     caption(this, outer, kind.list_caption, list_);
 
     wxBoxSizer *row = new wxBoxSizer(wxHORIZONTAL);

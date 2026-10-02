@@ -1,12 +1,14 @@
 // dectalk.cpp -- DECtalk's ten voices, singing.
 //
 // The synthesiser is DECtalk 5 as published in third_party/dectalk, built
-// with Microsoft's compiler into DECtalk.dll (scripts/build_dectalk.ps1).
-// The rest of the program is built with GCC, so the DLL is not linked: it is
-// loaded when first needed from voices\dectalk under the data roots (see
-// core/paths.h), or from beside the program, with the US English dictionary
-// dtalk_us.dic next to it. The dictionary is only for reading text, which
-// nothing here does, but DECtalk will not start without it.
+// with Microsoft's compiler into DECtalk.dll (scripts/build_dectalk.ps1) on
+// Windows, and with clang into libtts.dylib (scripts/build_dectalk_mac.sh) on
+// macOS. The rest of the program is built with GCC on Windows, so the DLL is
+// not linked: it is loaded when first needed from voices\dectalk under the
+// data roots (see core/paths.h), or from beside the program (on macOS, from
+// the bundle's Frameworks folder), with the US English dictionary
+// dtalk_us.dic in voices\dectalk. The dictionary is only for reading text,
+// which nothing here does, but DECtalk will not start without it.
 //
 // DECtalk sings from phonemes: in its phoneme mode every phoneme can carry a
 // length and a pitch, "aa<400,262>". Everything below follows from how the
@@ -70,7 +72,17 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
 #include <windows.h>
+#else
+// DECtalk's own names for its types, as its dtmmedefs.h has them on Unix:
+// 32-bit DWORD and UINT, and LONG a long, which is 64 bits here.
+#include <dlfcn.h>
+typedef uint32_t DWORD;
+typedef uint32_t UINT;
+typedef long LONG;
+typedef void *HMODULE;
+#endif
 
 #include "core/paths.h"
 #include "core/phonology.h"
@@ -382,29 +394,44 @@ private:
     // not tried again.
     bool start_locked() {
         if (tried_) return handle_ != nullptr;
+#ifdef _WIN32
+        const char *lib_name = "DECtalk.dll";
+#elif defined(__APPLE__)
+        const char *lib_name = "libtts.dylib";
+#else
+        const char *lib_name = "libtts.so";
+#endif
+        const std::string folder = data_name("voices\\dectalk");
         std::string dir = find_data("voices\\dectalk");
-        std::string dll = join_path(dir, "DECtalk.dll");
+        std::string dll = join_path(dir, lib_name);
         std::string dic = join_path(dir, "dtalk_us.dic");
         if (!file_exists(dll)) {
-            std::string beside = join_path(exe_dir(), "DECtalk.dll");
-            if (file_exists(beside)) {
+            // beside the program, or on macOS in the bundle's Frameworks
+            std::vector<std::string> near{join_path(exe_dir(), lib_name)};
+#ifdef __APPLE__
+            near.push_back(join_path(exe_dir(), std::string("../Frameworks/") + lib_name));
+#endif
+            for (const std::string &beside : near) {
+                if (!file_exists(beside)) continue;
                 dll = beside;
                 if (!file_exists(dic)) dic = join_path(exe_dir(), "dtalk_us.dic");
+                break;
             }
         }
         if (!file_exists(dll)) {
-            why_ = "DECtalk itself, DECtalk.dll, is not in voices\\dectalk";
+            why_ = std::string("DECtalk itself, ") + lib_name + ", is not in " + folder;
             return false;
         }
         if (!file_exists(dic)) {
-            why_ = "DECtalk's dictionary, dtalk_us.dic, is not in voices\\dectalk";
+            why_ = "DECtalk's dictionary, dtalk_us.dic, is not in " + folder;
             return false;
         }
         tried_ = true;
+#ifdef _WIN32
         // The DLL's own dependencies are looked for beside it.
         dll_ = LoadLibraryExW(widen(dll).c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
         if (!dll_) {
-            why_ = "DECtalk.dll in voices\\dectalk could not be loaded (Windows error " +
+            why_ = std::string(lib_name) + " in " + folder + " could not be loaded (Windows error " +
                    std::to_string(GetLastError()) + ")";
             return false;
         }
@@ -412,6 +439,16 @@ private:
         auto get = [&](const char *name) {
             return reinterpret_cast<void *>(GetProcAddress(dll_, name));
         };
+#else
+        dll_ = dlopen(dll.c_str(), RTLD_NOW | RTLD_LOCAL);
+        if (!dll_) {
+            const char *e = dlerror();
+            why_ = std::string(lib_name) + " in " + folder + " could not be loaded (" + (e ? e : "dlopen failed") +
+                   ")";
+            return false;
+        }
+        auto get = [&](const char *name) { return dlsym(dll_, name); };
+#endif
         startup_ = reinterpret_cast<StartupFn>(get("TextToSpeechStartupExFonix"));
         speak_ = reinterpret_cast<SpeakFn>(get("TextToSpeechSpeak"));
         sync_ = reinterpret_cast<HandleFn>(get("TextToSpeechSync"));
@@ -419,9 +456,10 @@ private:
         add_ = reinterpret_cast<AddBufferFn>(get("TextToSpeechAddBuffer"));
         return_ = reinterpret_cast<ReturnBufferFn>(get("TextToSpeechReturnBuffer"));
         if (!startup_ || !speak_ || !sync_ || !open_ || !add_ || !return_) {
-            why_ = "DECtalk.dll in voices\\dectalk is not a DECtalk 5 that this program knows";
+            why_ = std::string(lib_name) + " in " + folder + " is not a DECtalk 5 that this program knows";
             return false;
         }
+#ifdef _WIN32
         // DECtalk opens the dictionary with the ANSI file functions; the
         // short form of the path is plain ASCII wherever the folder is.
         std::wstring wdic = widen(dic);
@@ -431,8 +469,12 @@ private:
         int len = WideCharToMultiByte(CP_ACP, 0, wdic.c_str(), int(wdic.size()), nullptr, 0, nullptr, nullptr);
         std::vector<char> adic(size_t(std::max(0, len)) + 1, '\0');
         WideCharToMultiByte(CP_ACP, 0, wdic.c_str(), int(wdic.size()), adic.data(), len, nullptr, nullptr);
+#else
+        std::vector<char> adic(dic.begin(), dic.end());
+        adic.push_back('\0');
+#endif
         if (adic.size() >= 500) {
-            why_ = "the path to voices\\dectalk is too long for DECtalk";
+            why_ = "the path to " + folder + " is too long for DECtalk";
             return false;
         }
         DtHandle h = nullptr;

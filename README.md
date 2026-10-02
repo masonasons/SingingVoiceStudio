@@ -1,9 +1,10 @@
 # Singing Voice Studio
 
-VocalWriter Studio rebuilt in C++ and wxWidgets, with more singers in it. The
-window, the menus, the keys, the dialogs, the messages and the project files
-are VocalWriter Studio's own (see `C:\stuff\VocalWriter\app`); what is new is
-that a track can be sung by any of four synthesisers:
+VocalWriter Studio rebuilt in C++ and wxWidgets, with more singers in it, for
+Windows and macOS. The window, the menus, the keys, the dialogs, the messages
+and the project files are VocalWriter Studio's own (see
+`C:\stuff\VocalWriter\app`); what is new is that a track can be sung by any of
+four synthesisers:
 
 | engine | voices | numbers | what it is |
 |---|---|---|---|
@@ -43,7 +44,8 @@ them; each engine translates (the tables are at the top of
 ## Data you supply
 
 None of the synthesisers' data is in this program. It is looked for beside the
-executable, the folder above it, the source tree, and `%SVS_DATA%`:
+executable, the folder above it, the source tree, and `%SVS_DATA%` (on macOS
+also the bundle's `Contents/Resources` and the folder the `.app` sits in):
 
 ```
 assets\                     VocalWriter 2.0's files, laid out as in the
@@ -55,6 +57,9 @@ voices\microsoft\           Sam.spd, Mike.spd, Mary.spd (any of them). Without t
                             (the SAPI 5 voice package) or Common Files\Microsoft Shared\Speech\1033
                             (Windows XP)
 ```
+
+On macOS DECtalk is `libtts.dylib`, built here with clang
+(`scripts/build_dectalk_mac.sh`) and kept in the bundle's `Contents/Frameworks`.
 
 The SSI-263's phoneme ROM is compiled in. An engine whose data is missing still
 lists its voices, marked "(not installed)", and says what is missing in
@@ -92,9 +97,38 @@ and Microsoft's data, so it is for your own machines, not for publishing.
 `-DSVS_ENGINES="ssi263;microsoft"` (through `SVS_CMAKE_ARGS`) builds without an
 engine; its voices stay listed.
 
+### macOS
+
+Xcode's command line tools, CMake and Ninja (`brew install cmake ninja`):
+
+```
+sh scripts/build_mac.sh
+```
+
+That builds wxWidgets statically into `build-deps/wx` the first time, DECtalk
+with clang, then the program, and gathers every engine's data into
+`dist/Singing Voice Studio.app` (VocalWriter's files from `assets/` here or a
+VocalWriter Studio checkout beside this one, Microsoft's from
+`voices/microsoft`), checks that each engine sings from inside the bundle,
+signs it with the Developer ID in the keychain, puts it on
+`dist/SingingVoiceStudio-<date>-macos-<arch>.dmg`, and has Apple notarize
+both. `--no-sign` gives a bundle to run here; `--no-notarize` skips Apple; see
+the top of the script for the credentials it looks for. `cmake --build build`
+alone gives `build/SingingVoiceStudio.app` and `build/svs`, which find the
+data in the source tree.
+
+The program is the same on a Mac, with Cmd where this file says Ctrl and
+Option where it says Alt, two keys excepted: hearing one note is Option+H,
+since Cmd+H hides the program, and quitting is Cmd+Q. The lists are native
+macOS tables there, so VoiceOver reads them, and what a key did is announced
+through VoiceOver. On the command line the program is
+`Singing Voice Studio.app/Contents/MacOS/svs`, the same `svs` as on Windows.
+Settings live in `~/Library/Application Support/Singing Voice Studio`.
+
 ## The keys
 
-As VocalWriter Studio's. F1 lists them in Messages.
+As VocalWriter Studio's. F1 lists them in Messages. On a Mac read Cmd for
+Ctrl and Option for Alt, and Option+H to hear a note.
 
 | | |
 |---|---|
@@ -135,13 +169,18 @@ svs --pronounce daisy bicycle
 
 ```
 src/app/       the window, the dialogs, the command line (studio.cpp is VocalWriter
-               Studio's app/studio.py, method for method)
+               Studio's app/studio.py, method for method; widgets.h is the list
+               that is wxListCtrl on Windows and a native table on macOS;
+               announce.cpp and announce_mac.mm speak to the screen reader)
 src/core/      the song, projects, MIDI import, phonology, settings and recovery
 src/audio/     the mixer (VocalWriter Studio's ppc/engine.py), WAV files, the player
+               (player.cpp on Windows, player_mac.mm on macOS)
 src/voices/    singer.h (what an engine is asked to do), the four engines, the shared
                pitch curve
 engine/        VocalWriter's synthesiser in C (VocalWriterC)
 third_party/   DECtalk, the SSI-263, Microsoft Sam's reconstruction, nlohmann/json
+scripts/       the Windows build (build_all.ps1, build_dectalk.ps1) and the macOS
+               build (build_mac.sh, build_dectalk_mac.sh)
 tests/engines/ a standalone sing test for each engine
 ```
 

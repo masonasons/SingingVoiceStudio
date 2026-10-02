@@ -12,7 +12,9 @@
 //   voices\dectalk\         DECtalk's dictionary
 //
 // Places searched, nearest first: beside the executable, the folder above it,
-// the source tree it was built from, and $SVS_DATA.
+// the source tree it was built from, and $SVS_DATA. On macOS the executable
+// is inside the bundle, so the bundle's Resources folder and the folder the
+// .app sits in are searched too.
 #pragma once
 
 #include <string>
@@ -27,7 +29,11 @@ std::vector<std::string> data_roots();
 std::string find_data(const std::string &relative);
 bool data_exists(const std::string &relative);
 
+//: Join with this platform's separator. `b` may be written with either
+//: separator (the data's names are written with backslashes throughout).
 std::string join_path(const std::string &a, const std::string &b);
+//: A relative data path as this platform writes it, for a message.
+std::string data_name(const std::string &relative);
 std::string base_name(const std::string &path);
 std::string strip_extension(const std::string &path);
 std::string extension_lower(const std::string &path);

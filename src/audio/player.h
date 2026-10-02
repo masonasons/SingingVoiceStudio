@@ -3,7 +3,8 @@
 // That second part is why this exists: without it one key cannot both start
 // the song and stop it. Windows' media control interface answers the
 // question; it is spoken to by sending it strings, which is as odd as it
-// sounds, but it needs nothing installed.
+// sounds, but it needs nothing installed (player.cpp). On macOS an
+// AVAudioPlayer does the same (player_mac.mm).
 #pragma once
 
 #include <string>
@@ -23,6 +24,7 @@ public:
 private:
     void close();
     bool opened_ = false;
+    void *native_ = nullptr;   //: macOS: the AVAudioPlayer, retained
 };
 
 }  // namespace svs

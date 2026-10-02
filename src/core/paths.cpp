@@ -1,5 +1,7 @@
 #include "core/paths.h"
 
+#include <climits>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 
@@ -9,6 +11,9 @@
 #else
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
 #endif
 
 #ifndef SVS_SOURCE_DIR
@@ -43,13 +48,25 @@ std::string narrow(const std::wstring &w) {
 
 static bool is_sep(char c) { return c == '/' || c == '\\'; }
 
-std::string join_path(const std::string &a, const std::string &b) {
-    if (a.empty()) return b;
-    if (is_sep(a.back())) return a + b;
+std::string data_name(const std::string &relative) {
 #ifdef _WIN32
-    return a + "\\" + b;
+    return relative;
 #else
-    return a + "/" + b;
+    std::string s = relative;
+    for (char &c : s)
+        if (c == '\\') c = '/';
+    return s;
+#endif
+}
+
+std::string join_path(const std::string &a, const std::string &b) {
+    std::string rel = data_name(b);
+    if (a.empty()) return rel;
+    if (is_sep(a.back())) return a + rel;
+#ifdef _WIN32
+    return a + "\\" + rel;
+#else
+    return a + "/" + rel;
 #endif
 }
 
@@ -115,6 +132,20 @@ std::string exe_dir() {
     wchar_t buf[MAX_PATH * 4];
     DWORD n = GetModuleFileNameW(nullptr, buf, DWORD(sizeof buf / sizeof buf[0]));
     return parent(narrow(std::wstring(buf, n)));
+#elif defined(__APPLE__)
+    char small[1024];
+    uint32_t size = sizeof small;
+    std::string path;
+    if (_NSGetExecutablePath(small, &size) == 0) {
+        path = small;
+    } else {
+        std::string big(size + 1, '\0');
+        if (_NSGetExecutablePath(&big[0], &size) != 0) return ".";
+        path = big.c_str();
+    }
+    char real[PATH_MAX];
+    if (realpath(path.c_str(), real)) path = real;
+    return parent(path);
 #else
     char buf[4096];
     ssize_t n = readlink("/proc/self/exe", buf, sizeof buf - 1);
@@ -124,15 +155,36 @@ std::string exe_dir() {
 #endif
 }
 
+#ifdef __APPLE__
+//: Inside a bundle, the executable is at X.app/Contents/MacOS; the data is
+//: kept in Contents/Resources, and a copy can be put in the folder the .app
+//: itself sits in, as VocalWriter Studio looks for its assets there.
+static bool bundle_dirs(const std::string &exe, std::string *resources, std::string *beside) {
+    std::string contents = parent(exe);
+    if (base_name(exe) != "MacOS" || base_name(contents) != "Contents") return false;
+    *resources = join_path(contents, "Resources");
+    *beside = parent(parent(contents));
+    return true;
+}
+#endif
+
 std::vector<std::string> data_roots() {
     std::vector<std::string> out;
     std::string exe = exe_dir();
     out.push_back(exe);
     if (!parent(exe).empty()) out.push_back(parent(exe));
+#ifdef __APPLE__
+    std::string resources, beside;
+    bool bundled = bundle_dirs(exe, &resources, &beside);
+    if (bundled) out.push_back(resources);
+#endif
     // $SVS_ONLY_BESIDE asks for the program's own folder alone, which is how a
     // packaged copy checks that it carries everything it needs
     const char *only = std::getenv("SVS_ONLY_BESIDE");
-    if (only && *only) return {exe};
+    if (only && *only) return out;
+#ifdef __APPLE__
+    if (bundled && !beside.empty()) out.push_back(beside);
+#endif
     if (*SVS_SOURCE_DIR) out.push_back(SVS_SOURCE_DIR);
     const char *env = std::getenv("SVS_DATA");
     if (env && *env) out.push_back(env);
@@ -170,6 +222,9 @@ std::string settings_dir() {
     const wchar_t *app = _wgetenv(L"APPDATA");
     std::string base = app ? narrow(app) : exe_dir();
     return join_path(base, "Singing Voice Studio");
+#elif defined(__APPLE__)
+    const char *home = std::getenv("HOME");
+    return join_path(join_path(home ? home : ".", "Library/Application Support"), "Singing Voice Studio");
 #else
     const char *x = std::getenv("XDG_CONFIG_HOME");
     std::string base = x ? x : join_path(std::getenv("HOME") ? std::getenv("HOME") : ".", ".config");

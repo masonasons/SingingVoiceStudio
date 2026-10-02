@@ -179,12 +179,12 @@ void Studio::build() {
         {"Track", 150}, {"Voice", 160}, {"Volume", 70}, {"Pan", 90}, {"State", 90}};
     int c = 0;
     for (const auto &col : track_columns) tracks_list_->InsertColumn(c++, col.first, wxLIST_FORMAT_LEFT, col.second);
-    tracks_list_->Bind(wxEVT_LIST_ITEM_ACTIVATED, [this](wxListEvent &) {
+    tracks_list_->OnActivated([this] {
         wxCommandEvent e;
         on_track_edit(e);
     });
-    tracks_list_->Bind(wxEVT_LIST_ITEM_SELECTED, &Studio::on_track_chosen, this);
-    tracks_list_->Bind(wxEVT_KEY_DOWN, &Studio::on_track_key, this);
+    tracks_list_->OnSelected([this] { on_track_chosen(); });
+    tracks_list_->OnKey([this](wxKeyEvent &e) { on_track_key(e); });
     caption(p, outer, "Tracks", tracks_list_, 0);
 
     // not single-select: a phrase is copied, transposed or deleted as a
@@ -195,11 +195,11 @@ void Studio::build() {
                                                     {"Bar", 55}};
     c = 0;
     for (const auto &col : columns) list_->InsertColumn(c++, col.first, wxLIST_FORMAT_LEFT, col.second);
-    list_->Bind(wxEVT_LIST_ITEM_ACTIVATED, [this](wxListEvent &) {
+    list_->OnActivated([this] {
         wxCommandEvent e;
         on_edit(e);
     });
-    list_->Bind(wxEVT_KEY_DOWN, &Studio::on_key, this);
+    list_->OnKey([this](wxKeyEvent &e) { on_key(e); });
     caption(p, outer, "Notes", list_);
 
     messages_ = new wxTextCtrl(p, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 80),
@@ -218,79 +218,80 @@ void Studio::build_menu() {
     wxMenuBar *bar = new wxMenuBar();
 
     wxMenu *note = new wxMenu();
-    note->Append(ID_ADD_WORD, "Add &word...\tCtrl+W", "Look a word up and spread it over one note or several");
-    note->Append(ID_ADD_NOTE, "Add &note...\tCtrl+N", "Add a note and choose its phonemes");
-    note->Append(ID_ADD_REST, "Add &rest\tCtrl+R", "Add a silent break of the same length");
-    note->Append(ID_BAR_REST, "Rest to the end of the &bar\tCtrl+Shift+R",
+    note->Append(ID_ADD_WORD, K("Add &word...\tCtrl+W"), "Look a word up and spread it over one note or several");
+    note->Append(ID_ADD_NOTE, K("Add &note...\tCtrl+N"), "Add a note and choose its phonemes");
+    note->Append(ID_ADD_REST, K("Add &rest\tCtrl+R"), "Add a silent break of the same length");
+    note->Append(ID_BAR_REST, K("Rest to the end of the &bar\tCtrl+Shift+R"),
                  "Add a rest long enough to reach the next bar line");
-    note->Append(ID_EDIT, "&Edit note...\tCtrl+E", "Edit the selected note");
+    note->Append(ID_EDIT, K("&Edit note...\tCtrl+E"), "Edit the selected note");
     note->AppendSeparator();
     // No tab, so no global accelerator: Ctrl+C belongs to whatever text field
     // has the focus. The notes list handles these keys itself.
-    note->Append(wxID_CUT, "Cu&t (Ctrl+X on a note)", "Remove the selected notes and keep them to paste");
-    note->Append(wxID_COPY, "&Copy (Ctrl+C on a note)", "Keep the selected notes to paste");
-    note->Append(wxID_PASTE, "&Paste (Ctrl+V on a note)", "Put the kept notes in after the selection");
-    note->Append(wxID_SELECTALL, "Select &all (Ctrl+A on a note)", "Select every note in the song");
+    note->Append(wxID_CUT, K("Cu&t (Ctrl+X on a note)"), "Remove the selected notes and keep them to paste");
+    note->Append(wxID_COPY, K("&Copy (Ctrl+C on a note)"), "Keep the selected notes to paste");
+    note->Append(wxID_PASTE, K("&Paste (Ctrl+V on a note)"), "Put the kept notes in after the selection");
+    note->Append(wxID_SELECTALL, K("Select &all (Ctrl+A on a note)"), "Select every note in the song");
     note->AppendSeparator();
-    note->Append(ID_REMOVE, "&Remove note\tCtrl+D", "Remove the selected note");
+    note->Append(ID_REMOVE, K("&Remove note\tCtrl+D"), "Remove the selected note");
     note->AppendSeparator();
-    note->Append(ID_UP, "Transpose &up (Alt+Up on a note)", "Up one semitone");
-    note->Append(ID_DOWN, "Transpose &down (Alt+Down on a note)", "Down one semitone");
-    note->Append(ID_LONGER, "&Longer\tAlt+Right", "One sixteenth note longer");
-    note->Append(ID_SHORTER, "&Shorter\tAlt+Left", "One sixteenth note shorter");
+    note->Append(ID_UP, K("Transpose &up (Alt+Up on a note)"), "Up one semitone");
+    note->Append(ID_DOWN, K("Transpose &down (Alt+Down on a note)"), "Down one semitone");
+    note->Append(ID_LONGER, K("&Longer\tAlt+Right"), "One sixteenth note longer");
+    note->Append(ID_SHORTER, K("&Shorter\tAlt+Left"), "One sixteenth note shorter");
 
     wxMenu *track = new wxMenu();
-    track->Append(ID_TRACK_NEW, "&New track\tCtrl+T", "Add another part, with its own voice");
-    track->Append(ID_TRACK_EDIT, "&Track settings... (Enter on a track)", "Name, voice, volume and pan");
-    track->Append(ID_TRACK_REMOVE, "&Remove track (Delete on a track)",
+    track->Append(ID_TRACK_NEW, K("&New track\tCtrl+T"), "Add another part, with its own voice");
+    track->Append(ID_TRACK_EDIT, K("&Track settings... (Enter on a track)"), "Name, voice, volume and pan");
+    track->Append(ID_TRACK_REMOVE, K("&Remove track (Delete on a track)"),
                   "Remove the selected track and everything in it");
     track->AppendSeparator();
     // No tab, so no accelerator: S and M would be unusable in every text field.
-    track->Append(ID_TRACK_MUTE, "&Mute or unmute (M on a track)", "Silence this track");
-    track->Append(ID_TRACK_SOLO, "&Solo or unsolo (S on a track)", "Hear only the soloed tracks");
+    track->Append(ID_TRACK_MUTE, K("&Mute or unmute (M on a track)"), "Silence this track");
+    track->Append(ID_TRACK_SOLO, K("&Solo or unsolo (S on a track)"), "Hear only the soloed tracks");
     track->AppendSeparator();
-    track->Append(ID_TRACK_UP, "Move track &up (Ctrl+Up on a track)", "Put this part earlier in the list");
-    track->Append(ID_TRACK_DOWN, "Move track &down (Ctrl+Down on a track)", "Put this part later in the list");
+    track->Append(ID_TRACK_UP, K("Move track &up (Ctrl+Up on a track)"), "Put this part earlier in the list");
+    track->Append(ID_TRACK_DOWN, K("Move track &down (Ctrl+Down on a track)"), "Put this part later in the list");
 
     wxMenu *play = new wxMenu();
     // Space is handled by the lists rather than registered as an
     // accelerator, or it could never be typed into a word again.
-    mi_play_ = play->Append(ID_PLAY_PAUSE, "Play or &stop (Space)",
+    mi_play_ = play->Append(ID_PLAY_PAUSE, K("Play or &stop (Space)"),
                             "Play from the note the cursor is on, or stop if it is going");
     // Handled directly rather than as accelerators, keeping the shortcut
-    // visible in the label without a menu activation being announced.
-    play->Append(ID_PLAY, "Play from the &start (Ctrl+P)", "Sing every track from the beginning");
-    play->Append(ID_HEAR, "&Hear note (Ctrl+H)", "Sing the selected note");
-    play->Append(ID_STOP, "&Stop\tCtrl+.", "Stop playing");
+    // visible in the label without a menu activation being announced. On a
+    // Mac, Cmd+H hides the program, so hearing a note is Option+H there.
+    play->Append(ID_PLAY, K("Play from the &start (Ctrl+P)"), "Sing every track from the beginning");
+    play->Append(ID_HEAR, (is_mac() ? wxString("&Hear note (Option+H)") : K("&Hear note (Ctrl+H)")), "Sing the selected note");
+    play->Append(ID_STOP, K("&Stop\tCtrl+."), "Stop playing");
     play->AppendSeparator();
-    mi_metronome_ = play->AppendCheckItem(ID_METRONOME, "&Metronome\tCtrl+M",
+    mi_metronome_ = play->AppendCheckItem(ID_METRONOME, K("&Metronome\tCtrl+M"),
                                           "Tick along with Play. Never written into an exported file.");
 
     wxMenu *go = new wxMenu();
-    go->Append(ID_GOTO_BAR, "Go to &bar...\tCtrl+G", "Jump to the first note in a bar");
-    go->Append(ID_PANES, "&Tracks or notes\tF6", "Move between the tracks list and the notes list");
+    go->Append(ID_GOTO_BAR, K("Go to &bar...\tCtrl+G"), "Jump to the first note in a bar");
+    go->Append(ID_PANES, K("&Tracks or notes\tF6"), "Move between the tracks list and the notes list");
 
     wxMenu *f = new wxMenu();
-    f->Append(wxID_NEW, "&New\tCtrl+Shift+N", "Start an empty song");
-    f->Append(wxID_OPEN, "&Open project...\tCtrl+O", "Reopen a song saved earlier");
-    f->Append(wxID_SAVE, "&Save project\tCtrl+S", "Save the song");
-    f->Append(wxID_SAVEAS, "Save project &as...", "Save the song under a new name");
+    f->Append(wxID_NEW, K("&New\tCtrl+Shift+N"), "Start an empty song");
+    f->Append(wxID_OPEN, K("&Open project...\tCtrl+O"), "Reopen a song saved earlier");
+    f->Append(wxID_SAVE, K("&Save project\tCtrl+S"), "Save the song");
+    f->Append(wxID_SAVEAS, K("Save project &as..."), "Save the song under a new name");
     f->AppendSeparator();
-    f->Append(ID_IMPORT, "&Import MIDI...\tCtrl+I", "Take the notes from a MIDI file");
-    f->Append(ID_EXPORT, "&Export WAV...\tCtrl+Shift+S", "Write the whole song to one file");
-    f->Append(ID_EXPORT_TRACKS, "Export &tracks...\tCtrl+Shift+T", "Write every track to a file of its own");
+    f->Append(ID_IMPORT, K("&Import MIDI...\tCtrl+I"), "Take the notes from a MIDI file");
+    f->Append(ID_EXPORT, K("&Export WAV...\tCtrl+Shift+S"), "Write the whole song to one file");
+    f->Append(ID_EXPORT_TRACKS, K("Export &tracks...\tCtrl+Shift+T"), "Write every track to a file of its own");
     f->AppendSeparator();
-    f->Append(wxID_PREFERENCES, "&Song settings...\tCtrl+,",
+    f->Append(wxID_PREFERENCES, K("&Song settings...\tCtrl+,"),
               "Tempo, time signature, consonants, reverb, voice controls");
     f->AppendSeparator();
-    f->Append(wxID_EXIT, "E&xit\tAlt+F4");
+    f->Append(wxID_EXIT, (is_mac() ? wxString("&Quit\tCtrl+Q") : K("E&xit\tAlt+F4")));
 
     wxMenu *help = new wxMenu();
-    help->Append(ID_KEYS, "&Keys\tF1", "List the shortcuts in Messages");
+    help->Append(ID_KEYS, K("&Keys\tF1"), "List the shortcuts in Messages");
 
     wxMenu *edit = new wxMenu();
-    edit->Append(wxID_UNDO, "&Undo\tCtrl+Z", "Undo the last song edit");
-    edit->Append(wxID_REDO, "&Redo\tCtrl+Shift+Z", "Redo the last undone edit");
+    edit->Append(wxID_UNDO, K("&Undo\tCtrl+Z"), "Undo the last song edit");
+    edit->Append(wxID_REDO, K("&Redo\tCtrl+Shift+Z"), "Redo the last undone edit");
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { restore_history(false); }, wxID_UNDO);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { restore_history(true); }, wxID_REDO);
     Bind(wxEVT_UPDATE_UI, &Studio::on_update_history, this, wxID_UNDO);
@@ -303,7 +304,7 @@ void Studio::build_menu() {
     bar->Append(play, "&Play");
     bar->Append(go, "&Go");
     wxMenu *prefs = new wxMenu();
-    mi_auto_preview_ = prefs->AppendCheckItem(ID_AUTO_PREVIEW, "&Preview notes as they change\tCtrl+Shift+P",
+    mi_auto_preview_ = prefs->AppendCheckItem(ID_AUTO_PREVIEW, K("&Preview notes as they change\tCtrl+Shift+P"),
                                               "Hear a note whenever its pitch or length is nudged");
     mi_auto_preview_->Check(settings_.auto_preview);
     bar->Append(prefs, "&Settings");
@@ -353,16 +354,20 @@ void Studio::build_menu() {
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { Close(); }, wxID_EXIT);
 }
 
-//: Ctrl+H and Ctrl+P played directly, without a menu activation announcement.
+//: Ctrl+H and Ctrl+P (Option+H and Cmd+P on a Mac) played directly, without
+//: a menu activation announcement.
 void Studio::on_playback_shortcut(wxKeyEvent &evt) {
     int code = evt.GetKeyCode();
-    if (evt.ShiftDown()) {
+    bool mac = is_mac();
+    if (evt.ShiftDown() || (mac && evt.RawControlDown())) {
         evt.Skip();
         return;
     }
-    bool command = evt.ControlDown() && !evt.AltDown();
+    // CmdDown is the Control key on Windows and Command on a Mac
+    bool command = evt.CmdDown() && !evt.AltDown();
+    bool hear = mac ? (evt.AltDown() && !evt.CmdDown()) : command;
     wxCommandEvent e;
-    if (code == 'H' && command) {
+    if (code == 'H' && hear) {
         on_hear(e);
         return;
     }
@@ -454,7 +459,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "the vibrato",
         "Space  play from the note the cursor is on, or stop if it is playing",
         "Ctrl+P  play every track from the start",
-        "Ctrl+H  hear the selected note",
+        is_mac() ? "Option+H  hear the selected note" : "Ctrl+H  hear the selected note",
         "Ctrl+M  metronome on or off, for playing only",
         "Ctrl+. stop",
         "Ctrl+O open a project, Ctrl+S save it",
@@ -463,7 +468,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+Shift+T  export every track to its own WAV",
         "Enter on a note edits it",
     };
-    for (const char *line : lines) say(line);
+    for (const char *line : lines) say(K(line));
 }
 
 void Studio::say(const wxString &text) {
@@ -472,7 +477,7 @@ void Studio::say(const wxString &text) {
 }
 
 //: Speak a shortcut's result after updating its row, keeping focus.
-void Studio::announce_note(const wxString &text, wxListCtrl *control, int row) {
+void Studio::announce_note(const wxString &text, ReportList *control, int row) {
     say(text);
     if (announce(control, text)) return;
     reannounce(control, row);
@@ -569,8 +574,7 @@ void Studio::sync_tracks(int select) {
 }
 
 //: Moving down the tracks list changes what the notes list shows.
-void Studio::on_track_chosen(wxListEvent &evt) {
-    evt.Skip();
+void Studio::on_track_chosen() {
     int i = tracks_list_->FirstSelected();
     if (switching_ || i == current_ || i < 0 || i >= int(song_.tracks.size())) return;
     track().cursor = std::max(0, selection());

@@ -4,3 +4,4 @@
 /assets/
 /voices/
 *.wav
+/build-deps/

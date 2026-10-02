@@ -48,7 +48,7 @@ public:
 
     // -- what the dialogs ask of the window ----------------------------------
     void say(const wxString &text);
-    void announce_note(const wxString &text, wxListCtrl *control, int row);
+    void announce_note(const wxString &text, ReportList *control, int row);
     std::vector<PaletteRow> singable() const;
     Sig signature() const { return song_.sig; }
     const std::vector<VoiceListing> &voice_list() const { return voices_; }
@@ -86,7 +86,7 @@ private:
     std::string track_state(const Track &t) const;
     void refresh_track(int i);
     void sync_tracks(int select);
-    void on_track_chosen(wxListEvent &evt);
+    void on_track_chosen();
     void on_track_key(wxKeyEvent &evt);
     int track_at() const;
     void toggle_track(bool solo);
