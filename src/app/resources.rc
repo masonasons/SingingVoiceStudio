@@ -1,0 +1,2 @@
+// resources.rc -- wxWidgets' own resources, with its manifest.
+#include "wx/msw/wx.rc"

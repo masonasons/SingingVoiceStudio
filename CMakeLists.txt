@@ -191,6 +191,11 @@ if(APPLE)
 else()
   list(APPEND APP_SOURCES src/app/announce.cpp)
 endif()
+if(WIN32)
+  # the manifest asking for Common Controls v6, which wxWidgets expects
+  enable_language(RC)
+  list(APPEND APP_SOURCES src/app/resources.rc)
+endif()
 
 function(svs_executable name console)
   if(APPLE AND NOT console)
