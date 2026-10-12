@@ -20,9 +20,9 @@
 // vibrato, 6.3 Hz and +-2.05 Hz whatever the note (so deep on low notes and
 // slight on high ones). That glide and that vibrato are what DECtalk singing
 // sounds like, so they are left to DECtalk: a vowel is one phoneme however
-// long the note, a diphthong is DECtalk's own diphthong, and the pitch is
-// never steered from here. Everything below follows from how the engine
-// treats the two numbers, measured on this build:
+// long the note (unless a bend moves it, below), a diphthong is DECtalk's own
+// diphthong, and the pitch is never steered from here. Everything below
+// follows from how the engine treats the two numbers, measured on this build:
 //
 //   Lengths are counted in frames of 71 samples at 11025 Hz (6.44 ms; the
 //   engine's own arithmetic says 6.4). A length of n ms becomes
@@ -53,9 +53,11 @@
 // rather than bend inside it. So a bend is followed only as far as DECtalk's
 // scale can: each phoneme takes the semitone nearest the bent pitch at its
 // start (after any portamento has arrived), and a new note number is sent
-// where that changes. A bend held by whole semitones is sung exactly, with
-// DECtalk's glide into it; a bend that moves inside a vowel, or one smaller
-// than half a semitone, is not heard.
+// where that changes. A vowel that the bend moves to another semitone is
+// sung as two of itself, the second on the new note, as DECtalk sings a
+// vowel held over two notes. A bend held by whole semitones is sung
+// exactly, with DECtalk's glide into it; one smaller than half a semitone
+// is not heard.
 //
 // VocalWriter's phonemes are DECtalk's nearly one for one (the table below).
 // Every vowel, and syllabic l and n, is stressed, as a sung syllable is: an
@@ -180,6 +182,11 @@ double note_hz(int note) { return 440.0 * std::pow(2.0, (note + kNoteBase - 69) 
 //: in tests/engines/dectalk.)
 enum class NoteOn { kNoteStart, kEveryPhoneme, kVowel };
 constexpr NoteOn kNoteOn = NoteOn::kNoteStart;
+
+//: The shortest piece a bend cuts a vowel into, in frames. A piece takes a
+//: change closer than this to its start as its own note, and a change closer
+//: than this to the vowel's end is not sent.
+constexpr int kMinBendFrames = 4;
 
 //: Longer than this, a phoneme is sent as several copies of itself, which
 //: keeps its length inside what the engine counts in 16 bits (32767 ms).
@@ -627,6 +634,7 @@ public:
         place();
         shape();
         pitch();
+        split();
         choose_octave();
         build();
     }
@@ -717,6 +725,38 @@ private:
             t = std::max(a, std::min(b, t));
             p.midi = curve_.steady_midi_at(t);
         }
+    }
+
+    // A vowel is cut where the bend moves it to another semitone, and each
+    // piece after the first takes the new note.
+    void split() {
+        const double glide = portamento_seconds(phrase_.style.portamento);
+        std::vector<Placed> out;
+        for (const Placed &p : placed_) {
+            if (p.ph->kind != kVowel) {
+                out.push_back(p);
+                continue;
+            }
+            double a = curve_.note_start(p.note), b = curve_.note_end(p.note) - 1e-6;
+            Placed cur = p;
+            for (int f = p.start + 1; f <= p.end - kMinBendFrames; ++f) {
+                double t = std::max(a, std::min(b, std::max(f * kFrameSeconds, a + glide)));
+                double m = curve_.steady_midi_at(t);
+                if (std::lround(m) == std::lround(cur.midi)) continue;
+                // too near the piece's start: the piece takes the new note
+                if (f - cur.start < kMinBendFrames) {
+                    cur.midi = m;
+                    continue;
+                }
+                cur.end = f;
+                out.push_back(cur);
+                cur.start = f;
+                cur.midi = m;
+            }
+            cur.end = p.end;
+            out.push_back(cur);
+        }
+        placed_.swap(out);
     }
 
     // DECtalk sings from C2 to C5. A phrase that goes outside that is moved
