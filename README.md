@@ -132,10 +132,11 @@ goes to 200%.
 **A MIDI file's instruments** come in on the GM Soundbank, as VocalWriter
 took them in: the parts with words are sung, and the others are played with
 the programs the file gives them, channel 10 on the drum kit. When none of
-the parts chosen has words, Import asks last which one is sung, so that it
-comes in as a part to sing, its short rests closed and its notes on AA until
-words are put on them; the box starts on "None", which has every part played
-by the GM Soundbank. A part the file leaves unnamed is named after its
+the parts chosen has words, Import asks last which are sung, each ticked or
+unticked with Space and none ticked to begin with, so that they come in as
+parts to sing, their short rests closed and their notes on AA until words
+are put on them; with none ticked every part is played by the GM Soundbank.
+A part the file leaves unnamed is named after its
 instrument, the drum kit's "Drums", and so is each part of a track that plays
 on several channels, a type 0 file's or another's. Import asks first which
 parts come in, each ticked or unticked with Space: Every part, ticked to begin

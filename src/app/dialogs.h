@@ -294,15 +294,27 @@ private:
 };
 
 //: Which track a type 0 MIDI file's lyrics are sung on: one of `parts`,
-//: chosen in a box that starts on the first. Without `lyrics`, which track
-//: is sung in a file that has none.
+//: chosen in a box that starts on the first.
 class LyricTrackDialog : public wxDialog {
 public:
-    LyricTrackDialog(wxWindow *parent, const wxArrayString &parts, bool lyrics = true);
+    LyricTrackDialog(wxWindow *parent, const wxArrayString &parts);
     int chosen() const { return choice_->GetSelection(); }
 
 private:
     wxChoice *choice_;
+};
+
+//: Which of `parts` are sung in a MIDI file that has no lyrics, each ticked
+//: or unticked with Space, none to begin with; the others are played by the
+//: GM Soundbank.
+class SungPartsDialog : public wxDialog {
+public:
+    SungPartsDialog(wxWindow *parent, const wxArrayString &parts);
+    //: the parts ticked, as indices into `parts`
+    std::vector<int> chosen() const;
+
+private:
+    ReportList *list_;
 };
 
 //: Where Panthera is, for the MacinTalk voices: a folder typed in or browsed

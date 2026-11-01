@@ -1319,15 +1319,12 @@ std::vector<int> ImportPartsDialog::chosen() const {
     return out;
 }
 
-LyricTrackDialog::LyricTrackDialog(wxWindow *parent, const wxArrayString &parts, bool lyrics)
+LyricTrackDialog::LyricTrackDialog(wxWindow *parent, const wxArrayString &parts)
     : wxDialog(parent, wxID_ANY, "Import MIDI") {
     wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
-    wxStaticText *about = new wxStaticText(
-        this, wxID_ANY,
-        lyrics ? wxString("The lyrics in this file could belong to any of these tracks. Which track are they "
-                          "sung on? That track is the one that sings.")
-               : W(std::string("This file has no lyrics. Which track is sung? It sings ") + kDefaultPhoneme +
-                   " on every note until words are put on it, and the others are played by the GM Soundbank."));
+    wxStaticText *about = new wxStaticText(this, wxID_ANY,
+                                           "The lyrics in this file could belong to any of these tracks. Which "
+                                           "track are they sung on? That track is the one that sings.");
     about->Wrap(380);
     outer->Add(about, 0, wxALL, 8);
     choice_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(300, -1), parts);
@@ -1337,6 +1334,50 @@ LyricTrackDialog::LyricTrackDialog(wxWindow *parent, const wxArrayString &parts,
     // the first chosen, so a screen reader has a track to read, not a blank
     if (!parts.empty()) choice_->SetSelection(0);
     choice_->SetFocus();
+}
+
+SungPartsDialog::SungPartsDialog(wxWindow *parent, const wxArrayString &parts)
+    : wxDialog(parent, wxID_ANY, "Import MIDI") {
+    wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+    wxStaticText *about = new wxStaticText(
+        this, wxID_ANY,
+        W(std::string("This file has no lyrics. Which tracks are sung? Space ticks or unticks a track. Each one "
+                      "ticked sings ") +
+          kDefaultPhoneme + " on every note until words are put on it; the others, and every track if none is "
+                            "ticked, are played by the GM Soundbank."));
+    about->Wrap(380);
+    outer->Add(about, 0, wxALL, 8);
+    list_ = new ReportList(this, wxLC_REPORT | wxLC_SINGLE_SEL, wxSize(380, 220));
+    list_->EnableChecks();
+    list_->InsertColumn(0, "Part", wxLIST_FORMAT_LEFT, 350);
+    for (size_t i = 0; i < parts.size(); ++i) list_->InsertItem(long(i), parts[i]);
+    // Enter is OK, as in ImportPartsDialog: Windows gives Space, the tick,
+    // to the list's activation too
+    Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent &evt) {
+        int code = evt.GetKeyCode();
+        wxWindow *focus = wxWindow::FindFocus();
+        bool in_list = focus && (focus == list_ || list_->IsDescendant(focus));
+        if (!in_list || evt.HasAnyModifiers() || (code != WXK_RETURN && code != WXK_NUMPAD_ENTER)) {
+            evt.Skip();
+            return;
+        }
+        EndModal(wxID_OK);
+    });
+    caption(this, outer, "Sung tracks", list_, 1);
+    outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
+    SetSizerAndFit(outer);
+    if (!parts.empty()) {
+        list_->SelectRow(0);
+        list_->FocusRow(0);
+    }
+    list_->SetFocus();
+}
+
+std::vector<int> SungPartsDialog::chosen() const {
+    std::vector<int> out;
+    for (int i = 0; i < list_->GetItemCount(); ++i)
+        if (list_->IsChecked(i)) out.push_back(i);
+    return out;
 }
 
 SongSettingsDialog::SongSettingsDialog(wxWindow *parent, const Song &song, bool own_time)

@@ -2736,23 +2736,21 @@ void Studio::take_midi(const std::string &path, bool append) {
     for (const VoiceListing &v : voices_) gm = gm || (v.id == kGmBase && v.available);
     if (gm) {
         played = parts_to_play(parts);
-        // Without words, which part sings is asked all the same: it comes in
-        // to be sung, its short rests closed, its words added later. Or none.
+        // Without words, which parts sing is asked all the same: they come in
+        // to be sung, their short rests closed, their words added later. Or none.
         bool words = std::any_of(parts.begin(), parts.end(), [](const MidiPart &p) { return p.words; });
         std::vector<std::string> singable;
         wxArrayString labels;
-        labels.Add("None, play all tracks with the soundbank");
         for (const MidiPart &p : parts)
             if (!p.drums) {
                 singable.push_back(p.name);
                 labels.Add(W(described(p)));
             }
         if (!words && !singable.empty()) {
-            LyricTrackDialog ask(this, labels, false);
-            if (ask.ShowModal() != wxID_OK || ask.chosen() < 0) return;
-            if (ask.chosen() > 0)
-                played.erase(std::remove(played.begin(), played.end(), singable[size_t(ask.chosen() - 1)]),
-                             played.end());
+            SungPartsDialog ask(this, labels);
+            if (ask.ShowModal() != wxID_OK) return;
+            for (int i : ask.chosen())
+                played.erase(std::remove(played.begin(), played.end(), singable[size_t(i)]), played.end());
         }
     } else {
         say("the GM Soundbank cannot play here, so every part is sung: VocalWriter's instrument bank, "
