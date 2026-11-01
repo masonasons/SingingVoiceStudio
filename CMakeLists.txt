@@ -185,12 +185,16 @@ if(NOT miniaudio_POPULATED)
   FetchContent_Populate(miniaudio)   # the header only; not its own build
 endif()
 list(APPEND CORE_SOURCES src/audio/player.cpp src/audio/decode.cpp src/audio/miniaudio.c)
+# -- FLAC and Ogg Vorbis ------------------------------------------------------
+# What Export audio writes besides WAV (src/audio/encode.cpp).
+include(${SVS_ROOT}/cmake/xiph.cmake)
+list(APPEND CORE_SOURCES src/audio/encode.cpp)
 
 add_library(svs_core STATIC ${CORE_SOURCES})
 target_include_directories(svs_core PUBLIC ${SVS_ROOT}/src ${SVS_ROOT}/third_party/nlohmann
                            ${miniaudio_SOURCE_DIR})
 target_compile_definitions(svs_core PUBLIC SVS_SOURCE_DIR="${SVS_ROOT}" ${SVS_ENGINE_DEFS})
-target_link_libraries(svs_core PUBLIC vwengine ${SVS_ENGINE_LIBS})
+target_link_libraries(svs_core PUBLIC vwengine ${SVS_ENGINE_LIBS} FLAC svs_vorbis)
 set_source_files_properties(src/audio/miniaudio.c PROPERTIES COMPILE_OPTIONS "-w")
 if(WIN32)
   target_link_libraries(svs_core PUBLIC winmm ole32)

@@ -96,7 +96,7 @@ struct Mixed {
     double lead = 0;
 };
 
-//: The same, written to a WAV file: an export.
+//: The same, written to a sound file: an export.
 struct RenderResult {
     bool ok = false;
     std::string error;
@@ -120,7 +120,8 @@ public:
     //: The song in memory, the metronome on it if the request asks for it.
     //: Only phrases not sung before are sung: the rest come from memory.
     Mixed mix(const RenderRequest &req);
-    //: The song written to `out`, as 16-bit PCM: what Export does.
+    //: The song written to `out`, a WAV, FLAC or Ogg Vorbis file as its name
+    //: says (write_audio): what Export does.
     //: `progress`, if given, is told how far it has got, 0 to 1, on this
     //: thread as it goes, and returns false to give it up: then nothing is
     //: written, and nothing half sung is kept.

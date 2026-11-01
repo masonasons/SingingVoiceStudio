@@ -69,6 +69,8 @@ Settings load_settings() {
         s.octave_instruments = doc["octave_instruments"].get<bool>();
     if (doc.contains("follow_playback") && doc["follow_playback"].is_boolean())
         s.follow_playback = doc["follow_playback"].get<bool>();
+    if (doc.contains("export_format") && doc["export_format"].is_string())
+        s.export_format = doc["export_format"].get<std::string>();
     return s;
 }
 
@@ -86,6 +88,7 @@ bool save_settings(const Settings &s) {
     doc["plain_held_vowels"] = s.plain_held_vowels;
     doc["octave_instruments"] = s.octave_instruments;
     doc["follow_playback"] = s.follow_playback;
+    doc["export_format"] = s.export_format;
     return write_text(in_folder("settings.json"), doc.dump(1) + "\n");
 }
 

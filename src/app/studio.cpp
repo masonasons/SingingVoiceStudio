@@ -22,6 +22,7 @@
 #include "app/crash.h"
 #include "app/dialogs.h"
 #include "audio/decode.h"
+#include "audio/encode.h"
 #include "core/midiexport.h"
 #include "core/paths.h"
 #include "core/vwsong.h"
@@ -411,7 +412,8 @@ void Studio::build_menu() {
               "Take the notes from a MIDI file, or a whole song from VocalWriter");
     f->Append(ID_APPEND, K("A&ppend MIDI...\tCtrl+Shift+A"),
               "Put a MIDI file's parts under the song's tracks, its tempo in place of the song's");
-    f->Append(ID_EXPORT, K("&Export WAV...\tCtrl+Shift+S"), "Write the whole song to one file");
+    f->Append(ID_EXPORT, K("&Export audio...\tCtrl+Shift+S"),
+              "Write the whole song to one file: WAV, FLAC or Ogg Vorbis");
     f->Append(ID_EXPORT_TRACKS, K("Export &tracks...\tCtrl+Shift+T"), "Write every track to a file of its own");
     f->Append(ID_EXPORT_MIDI, K("Export &MIDI...\tCtrl+Shift+M"),
               "Write the song as a Standard MIDI File, the words and phonemes on its notes, as VocalWriter did");
@@ -856,7 +858,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "where it got to when it stops",
         "Ctrl+Shift+V  whether VocalWriter's voices are sung through its own sequencer, sample for sample as "
         "VocalWriter 2.0 sang them, or phrase by phrase as the other engines sing",
-        "Ctrl+Shift+S  export the whole song as one WAV",
+        "Ctrl+Shift+S  export the whole song as one WAV, FLAC or Ogg Vorbis file",
         "Ctrl+Shift+T  export every track to its own WAV",
         "Ctrl+Shift+M  export the song as a MIDI file, as VocalWriter did: the channels are asked first",
         "Enter on a note edits it",
@@ -2316,11 +2318,30 @@ void Studio::on_export(wxCommandEvent &) {
         say("nothing to export: no track that can be heard has any notes in it");
         return;
     }
+    // the kind of file chosen last time to begin with
+    int kind = 0;
+    for (int k = 0; k < kExportKinds; ++k)
+        if (settings_.export_format == kExportExtensions[k]) kind = k;
     std::string name = song_name();
-    wxFileDialog dlg(this, "Export audio", "", W(name.empty() ? name : name + ".wav"), "WAV files (*.wav)|*.wav",
-                     wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    wxFileDialog dlg(this, "Export audio", "", W(name.empty() ? name : name + kExportExtensions[kind]),
+                     kExportWildcard, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    dlg.SetFilterIndex(kind);
     if (dlg.ShowModal() != wxID_OK) return;
     std::string path = U(dlg.GetPath());
+    // a name with none of the kinds' endings is given the one chosen
+    kind = std::max(0, std::min(kExportKinds - 1, dlg.GetFilterIndex()));
+    std::string ext = extension_lower(path);
+    bool known = false;
+    for (int k = 0; k < kExportKinds; ++k)
+        if (ext == kExportExtensions[k]) {
+            known = true;
+            kind = k;
+        }
+    if (!known) path += kExportExtensions[kind];
+    if (settings_.export_format != kExportExtensions[kind]) {
+        settings_.export_format = kExportExtensions[kind];
+        save_settings(settings_);
+    }
     say(W("rendering to " + base_name(path)));
     // A window that stays until the file is written, so the program is not
     // closed under it, and that can give the export up.
@@ -2329,7 +2350,7 @@ void Studio::on_export(wxCommandEvent &) {
     auto cancel = std::make_shared<std::atomic<bool>>(false);
     export_cancel_ = cancel;
     export_shown_ = 0;
-    exporting_ = new wxProgressDialog("Export WAV", W("Exporting " + base_name(path)), 1000, this,
+    exporting_ = new wxProgressDialog("Export audio", W("Exporting " + base_name(path)), 1000, this,
                                       wxPD_APP_MODAL | wxPD_CAN_ABORT | wxPD_ELAPSED_TIME | wxPD_REMAINING_TIME);
     export_timer_.Start(kExportPoll);
     std::shared_ptr<Mixer> mixer = mixer_;

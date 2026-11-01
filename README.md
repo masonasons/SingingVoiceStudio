@@ -61,7 +61,7 @@ starts on its beat whatever the tempo, but plays at its own speed from
 there, so changing the tempo moves the voices after that against the
 recording. A project saved with the start in seconds, as before, has it
 put on the beat the song's tempo gave it. Play from the cursor starts the file at the
-same moment; Export WAV includes it, Export tracks leaves it out (it is a file
+same moment; Export audio includes it, Export tracks leaves it out (it is a file
 already). The project saves where the file is; a project sent along with its
 file in the same folder finds it there. VocalWriter Studio reads such a
 project too, the backing track as a part with no notes.
@@ -178,6 +178,13 @@ that starts with a vowel is DH IY.
 **Append MIDI** (File > Append MIDI, Ctrl+Shift+A) puts the parts of a MIDI
 file under the song's own tracks, chosen as Import chooses them; its tempo
 changes and time signature take the place of the song's.
+
+**Export audio** (File > Export audio, Ctrl+Shift+S) writes the whole song
+to one file, a WAV, a FLAC or an Ogg Vorbis file, as chosen in the file box
+or by the name's ending; the kind chosen last is chosen again next time. A
+FLAC holds exactly the 16-bit samples the WAV would, and Ogg Vorbis is
+written at quality 6, about 190 kbit/s in stereo. The command line writes
+whichever the name given to `-o` ends in. Export tracks writes WAVs.
 
 **Export MIDI** (File > Export MIDI, Ctrl+Shift+M) writes the song as a
 type 1 Standard MIDI File, as VocalWriter's own File > Export did: 240 ticks
@@ -363,7 +370,8 @@ voice keeps it, marked "(not installed)", and says why when it is played.
 
 msys2's mingw64 GCC, CMake and Ninja. wxWidgets is fetched from GitHub and built
 with the program, statically, at a pinned master commit (see CMakeLists.txt), so
-the first build takes a while longer:
+the first build takes a while longer; so are Xiph's libFLAC, libogg and
+libvorbis, at pinned releases, for Export audio (cmake/xiph.cmake):
 
 ```
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
@@ -486,13 +494,14 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+Shift+D | whether importing MIDI and adding a word sing a vowel held over several notes on its first sound |
 | Ctrl+Shift+O | whether importing MIDI transposes the instruments the soundbank has an octave off by an octave |
 | Ctrl+Shift+V | whether VocalWriter's voices are sung through its own sequencer |
-| Ctrl+Shift+S / Ctrl+Shift+T | export one WAV / one WAV per track |
+| Ctrl+Shift+S / Ctrl+Shift+T | export one WAV, FLAC or Ogg Vorbis file / one WAV per track |
 | Ctrl+Shift+M | export a MIDI file |
 
 ## From the command line
 
 ```
 svs song.vws -o song.wav
+svs song.vws -o song.flac
 svs tune.mid -o tune.wav --voice "DECtalk Betty" --tempo 96
 svs band.mid -o band.wav --sing-all
 svs song.vws --tracks stems
@@ -508,7 +517,8 @@ src/app/       the window, the dialogs, the command line (studio.cpp is VocalWri
                that is wxListCtrl on Windows and a native table on macOS;
                announce.cpp and announce_mac.mm speak to the screen reader)
 src/core/      the song, projects, MIDI import, phonology, settings and recovery
-src/audio/     the mixer (VocalWriter Studio's ppc/engine.py), WAV files, the player
+src/audio/     the mixer (VocalWriter Studio's ppc/engine.py), WAV, FLAC and Ogg Vorbis
+               files (encode.cpp), the player
                (player.cpp on Windows, player_mac.mm on macOS)
 src/voices/    singer.h (what an engine is asked to do), the four engines, the shared
                pitch curve

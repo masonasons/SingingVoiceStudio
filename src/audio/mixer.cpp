@@ -11,7 +11,7 @@
 #endif
 
 #include "audio/decode.h"
-#include "audio/wav.h"
+#include "audio/encode.h"
 #include "core/paths.h"
 #include "core/phonology.h"
 #include "voices/registry.h"
@@ -1074,10 +1074,8 @@ RenderResult Mixer::render(const RenderRequest &req, const std::string &out_path
     if (!m.ok) return res;
     std::vector<float> y = *m.samples;
     if (req.metronome) with_metronome(y, m.channels, req.clock(), *req.metronome, req.start, m.lead);
-    if (!write_wav(out_path, y, m.channels)) {
-        res.ok = false;
-        res.error = "could not write " + out_path;
-    }
+    // WAV, FLAC or Ogg Vorbis, as the file's name says
+    if (!write_audio(out_path, y, m.channels, &res.error)) res.ok = false;
     return res;
 }
 
