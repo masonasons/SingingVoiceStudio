@@ -154,6 +154,8 @@ before the note it comes at, sung or played. A sung part's program changes
 after its first note are controllers too, changes of voice to the one
 VocalWriter's own program number picks. A MIDI file
 opened from the desktop or named on the command line comes in the same way.
+One that cannot be read, or a VocalWriter song that cannot, says why in a
+box of its own, put away with OK, to the system's critical stop sound.
 A syllable the file gives no note of its own is sung where it falls: one
 in the middle of a note ("the sea" on one note) divides it there, and one
 in a rest ("to" before "see") has a note from there to the next, at that

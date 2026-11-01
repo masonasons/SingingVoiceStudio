@@ -75,6 +75,15 @@ void exclaim() {
 #endif
 }
 
+//: The system's critical stop, so that a failure is heard as well as read.
+void critical_stop() {
+#ifdef __WXMSW__
+    ::MessageBeep(MB_ICONHAND);
+#else
+    wxBell();
+#endif
+}
+
 std::string plural(size_t n, const char *one, const char *many = nullptr) {
     return std::to_string(n) + " " + (n == 1 ? one : (many ? many : (std::string(one) + "s").c_str()));
 }
@@ -2665,11 +2674,11 @@ void Studio::take_midi(const std::string &path, bool append) {
     try {
         parts = midi_parts(path);
     } catch (const std::exception &e) {
-        say(W("cannot read " + base_name(path) + ": " + e.what()));
+        cannot_load(path, e.what());
         return;
     }
     if (parts.empty()) {
-        say(W(base_name(path) + " has no notes in it"));
+        cannot_load(path, "there are no notes in it");
         return;
     }
     // A type 0 file's lyrics could be sung on any of several channels
@@ -2725,7 +2734,7 @@ void Studio::take_midi(const std::string &path, bool append) {
             for (const MidiPart &p : midi_parts(path, lyrics_on))
                 if (std::find(wanted.begin(), wanted.end(), p.name) != wanted.end()) parts.push_back(p);
         } catch (const std::exception &e) {
-            say(W("cannot read " + base_name(path) + ": " + e.what()));
+            cannot_load(path, e.what());
             return;
         }
     }
@@ -2765,7 +2774,7 @@ void Studio::take_midi(const std::string &path, bool append) {
                           programs, settings_.close_word_rests, settings_.octave_instruments,
                           settings_.remove_volume_changes);
     } catch (const std::exception &e) {
-        say(W(std::string("cannot import: ") + e.what()));
+        cannot_load(path, e.what());
         return;
     }
     // the tempo and time signature changes on a track of their own, above the parts
@@ -2873,7 +2882,7 @@ void Studio::import_vocalwriter(const std::string &path) {
     try {
         got = import_vocalwriter_song(path, programs);
     } catch (const std::exception &e) {
-        say(W("cannot import " + base_name(path) + ": " + e.what()));
+        cannot_load(path, e.what());
         return;
     }
     Clock clock = got.song.clock();
@@ -2895,6 +2904,15 @@ void Studio::import_vocalwriter(const std::string &path) {
     }
     for (const std::string &note : got.notes) say(W(note));
     to_tracks();
+}
+
+//: A MIDI file or VocalWriter song that could not be read: said in a box to
+//: be put away with OK, with the system's critical stop, and in Messages.
+void Studio::cannot_load(const std::string &path, const std::string &why) {
+    std::string said = base_name(path) + " could not be loaded: " + why + ".";
+    say(W(said));
+    critical_stop();
+    wxMessageBox(W(said), kAppName, wxOK | wxICON_ERROR, this);
 }
 
 //: Fill in the pronunciations for a MIDI that carried only lyrics.
