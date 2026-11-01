@@ -144,9 +144,14 @@ the bend, the detune, the sustain pedal and the volume, and the pan in the mix
 -- in stereo. It is played as the SoundFont players play it, VirtualMidiSynth
 and FluidSynth among them, which TinySoundFont alone does not: each preset's
 own attenuation at 0.4 of what the SoundFont 2 specification gives, as E-mu's
-own cards had it, and the velocity and the volume as the specification has
-them, 40 log10(value / 127) dB, so a note at half the velocity, or under a
-volume control at half, is 12 dB down. The track's volume, which is where a
+own cards had it; each preset's modulators, with which a SoundFont has the
+velocity and the key open the filter, shorten the envelopes, tune the note
+and set its own velocity curve; and, where a preset sets none of its own,
+the velocity and the volume as the specification has them, 40 log10(value /
+127) dB, so a note at half the velocity, or under a volume control at half,
+is 12 dB down. Of the specification's default modulators, the velocity's on
+the filter is left out, as VirtualMidiSynth leaves it out. A key struck again
+before it was let go is let go the first time first, as on a MIDI channel. The track's volume, which is where a
 MIDI file's CC 7 by CC 11 comes in, is taken the same way: a track at 50% is
 12 dB down, where for the other engines it is 6 dB.
 

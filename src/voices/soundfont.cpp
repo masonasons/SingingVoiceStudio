@@ -3,10 +3,10 @@
 // A part is played as a MIDI channel would play it: each note on at its beat
 // and off when it has sounded for its beats, or its hold; the instrument
 // changes, the volume, the pedal, the detune and the bend at their moments.
-// The pan is the mix's. The presets' attenuation, the velocity and the volume
-// are taken as the SoundFont players take them (tinysoundfont.h), which
-// TinySoundFont alone does not, and so is the track's volume, where a MIDI
-// file's CC 7 by CC 11 comes in.
+// The pan is the mix's. The presets' attenuation, their modulators, the
+// velocity and the volume are taken as the SoundFont players take them
+// (tinysoundfont.h), which TinySoundFont alone does not, and so is the
+// track's volume, where a MIDI file's CC 7 by CC 11 comes in.
 #include "voices/soundfont.h"
 
 #include <algorithm>
@@ -150,7 +150,11 @@ int skip_stream(void *data, unsigned int count) {
 struct Font {
     std::mutex mu;
     tsf *base = nullptr;
-    ~Font() { tsf_close(base); }
+    svs_tsf_mods *mods = nullptr;
+    ~Font() {
+        svs_tsf_free_mods(mods);
+        tsf_close(base);
+    }
 };
 
 class SoundFontSinger : public Singer {
@@ -163,6 +167,7 @@ public:
     ~SoundFontSinger() override {
         std::lock_guard<std::mutex> lock(font_->mu);
         tsf_close(f_);
+        svs_tsf_free_voices(voices_);
     }
 
     //: A phrase, as a part that starts with it.
@@ -275,8 +280,6 @@ public:
             }
             return true;
         };
-        // a key struck again before it was let go is let go once, at the end
-        std::map<int, int> down;
         for (const Ev &e : ev) {
             if (!render(size_t(std::max(0L, std::lround(e.t * kSampleRate))))) return out;
             switch (e.kind) {
@@ -285,13 +288,9 @@ public:
             case kSustain: tsf_channel_set_sustain(f_, ch, e.v >= 64); break;
             case kTuning: tsf_channel_set_tuning(f_, ch, float(e.v)); break;
             case kWheel: tsf_channel_set_pitchwheel(f_, ch, e.a); break;
-            case kOn:
-                ++down[e.a];
-                svs_tsf_note_on(f_, ch, e.a, int(e.v));
-                break;
-            case kOff:
-                if (--down[e.a] <= 0) tsf_channel_note_off(f_, ch, e.a);
-                break;
+            case kOn: svs_tsf_note_on(f_, font_->mods, &voices_, ch, e.a, int(e.v)); break;
+            // the key's oldest note still sounding, as a MIDI channel lets go
+            case kOff: tsf_channel_note_off(f_, ch, e.a); break;
             }
         }
         if (!render(size_t(std::lround(end * kSampleRate)))) return out;
@@ -318,6 +317,8 @@ private:
     SoundFontInfo info_;
     int voice_;
     tsf *f_ = nullptr;
+    //: the regions its voices play, with their modulators applied
+    svs_tsf_voices *voices_ = nullptr;
 };
 
 class SoundFontFamily : public Family {
@@ -355,9 +356,11 @@ public:
             // the samples, read the first time a voice plays
             std::FILE *f = open_read(info_.path);
             tsf *base = nullptr;
+            svs_tsf_mods *mods = nullptr;
             if (f) {
                 tsf_stream stream{f, read_stream, skip_stream};
                 base = tsf_load(&stream);
+                if (base) mods = svs_tsf_read_mods(base, f);
                 std::fclose(f);
             }
             if (!base) {
@@ -368,6 +371,7 @@ public:
             svs_tsf_attenuation(base);
             font_ = std::make_shared<Font>();
             font_->base = base;
+            font_->mods = mods;
         }
         auto s = std::make_unique<SoundFontSinger>(font_, info_, voice_id);
         return s;
