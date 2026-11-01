@@ -60,5 +60,9 @@ bool resolve_voice_names(Song &song, const std::vector<VoiceListing> &voices);
 //: The name a track should be saved with for this voice: none for
 //: VocalWriter's own, which stay just a number as VocalWriter Studio wrote them.
 std::optional<std::string> saved_voice_name(int voice_id, const std::vector<VoiceListing> &voices);
+//: Every voice of the song's tracks and controllers without a name given its
+//: name (saved_voice_name): a song saved with them keeps its voices if their
+//: numbers move, as a SoundFont's do from one machine to another.
+void name_voices(Song &song, const std::vector<VoiceListing> &voices);
 
 }  // namespace svs

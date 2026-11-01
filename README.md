@@ -13,12 +13,15 @@ by SoundFonts:
 | **SSI-263** | SSI-263, Deep, Bright, Child | 2000 - 2003 | the chip itself, driven at register level (github.com/tgeczy/ssi263-speech) |
 | **Microsoft** | Sam, Mike, Mary, each plain, in Hall, in Stadium, in Space, Whisper, RoboSoft One to Six | 3000 - 3050 | the SAPI 5 engine rebuilt in C, with the SAPI 4 voice modes (github.com/KamiKitsune420/ms-sam-mike-mary-decomp) |
 | **MacinTalk** | Agnes, Albert, Bad News, Bahh, Bells, Boing, Bruce, Bubbles, Cellos, Deranged, Fred, Good News, Hysterical, Junior, Kathy, Pipe Organ, Princess, Ralph, Trinoids, Vicki, Victoria, Whisper, Zarvox, from each of Mac OS X 10.4 Tiger, 10.5 Leopard, 10.6 Snow Leopard and 10.7 Lion, and Alex from 10.5 on | 4000 - 4022, 4100 - 4123, 4200 - 4223, 4300 - 4323 | Apple's own engines: on Windows run by Panthera's host (github.com/tgeczy/panthera-speech) and sung through Apple's TUNE notation; on a Mac the system's own voices, spoken from phonemes and retuned to the score (see below) |
-| **GM Soundbank** | the 128 General MIDI instruments and a drum kit | 5000 - 5127, 5128 | VocalWriter 2.0's own instrument bank and wavetable synthesiser, which played its MIDI tracks (see below) |
-| **SoundFonts** | every preset of each SoundFont (.sf2) loaded, up to a thousand | 6000 - 6999 for the first, 7000 - 7999 for the next, and so on | played by TinySoundFont (github.com/schellingb/TinySoundFont), compiled in (see below) |
+| **GM Soundbank** | the 128 General MIDI instruments and a drum kit | 100000 - 100127, 100128 | VocalWriter 2.0's own instrument bank and wavetable synthesiser, which played its MIDI tracks (see below) |
+| **SoundFonts** | every preset of each SoundFont (.sf2) loaded, up to a thousand | 101000 - 101999 for the first, 102000 - 102999 for the next, and so on | played by TinySoundFont (github.com/schellingb/TinySoundFont), compiled in (see below) |
 
 A voice's number is what a song saves, and it is fixed per engine, so a song
 written with DECtalk Betty still says Betty on a machine without DECtalk and
-says why it cannot sing there.
+says why it cannot sing there. The engines that sing have the numbers below
+100000, room for more of them; the instruments come after, from 100000 on. A
+song is saved with the name of every voice but VocalWriter's own as well, and
+the name wins if the numbers ever disagree.
 
 Everything renders through one path. A part is cut into phrases at its rests,
 the consonants are moved in front of the beat so the vowel lands on it, each
@@ -128,8 +131,8 @@ and Remove, before it, takes out the one selected in the list. A SoundFont
 loaded is at the bottom of the Engine box, named after its file without its
 extension ("SGM-v2.01.sf2" is "SGM-v2.01"), with all its own presets as its
 voices, whatever bank they are in, not only General MIDI's. Each SoundFont has
-a thousand voice numbers: the first loaded 6000 - 6999, the next 7000 - 7999,
-and so on, a SoundFont removed leaving its numbers to the next one loaded. Its
+a thousand voice numbers: the first loaded 101000 - 101999, the next 102000 -
+102999, and so on, a SoundFont removed leaving its numbers to the next one loaded. Its
 presets are numbered in the order of their bank and program, so **only the
 first 1000 sounds of a SoundFont with more are used**. A preset in bank 128,
 a SoundFont's percussion bank, is a drum kit, and so is one in bank 120 or

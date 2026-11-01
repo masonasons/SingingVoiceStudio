@@ -116,7 +116,9 @@ bool read_presets(const std::string &path, std::vector<SoundFontPreset> *out, st
     return true;
 }
 
-const char *const kBuiltIn[] = {"VocalWriter", "DECtalk", "SSI-263", "Microsoft", "MacinTalk", "GM Soundbank"};
+//: names a SoundFont is not given: the other families', and "GM", which the
+//: GM Soundbank's voices begin with
+const char *const kBuiltIn[] = {"VocalWriter", "DECtalk", "SSI-263", "Microsoft", "MacinTalk", "GM Soundbank", "GM"};
 
 std::mutex g_mu;
 std::vector<SoundFontInfo> g_fonts;

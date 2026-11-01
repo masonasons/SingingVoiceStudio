@@ -5,16 +5,21 @@
 // installed: a song written with DECtalk's Betty still says Betty on a machine
 // without DECtalk, and says why it cannot sing.
 //
-//      0 -  999   VocalWriter's voice bank, in the bank's own order
-//   1000 - 1999   DECtalk
-//   2000 - 2999   the SSI-263
-//   3000 - 3999   Microsoft Sam, Mike and Mary, and the SAPI 4 voice modes
-//   4000 - 4999   MacinTalk: Apple's voices from Mac OS X 10.4 to 10.7, a
-//                 hundred numbers to each generation
-//   5000 - 5999   the GM Soundbank: VocalWriter's own General MIDI instruments
-//                 (GMBank), 5000 + the GM program, and 5128 the drum kit
-//   6000 -        the SoundFonts loaded in the Soundbank manager, a thousand
-//                 numbers to each (soundfont.h)
+//        0 -    999   VocalWriter's voice bank, in the bank's own order
+//     1000 -   1999   DECtalk
+//     2000 -   2999   the SSI-263
+//     3000 -   3999   Microsoft Sam, Mike and Mary, and the SAPI 4 voice modes
+//     4000 -   4999   MacinTalk: Apple's voices from Mac OS X 10.4 to 10.7, a
+//                     hundred numbers to each generation
+//     5000 -  99999   kept for engines still to come that sing
+//   100000 - 100999   the GM Soundbank: VocalWriter's own General MIDI
+//                     instruments (GMBank), 100000 + the GM program, and
+//                     100128 the drum kit
+//   101000 -          the SoundFonts loaded in the Soundbank manager, a
+//                     thousand numbers to each (soundfont.h)
+//
+// The instruments come after every engine that sings, so that a new engine
+// moves none of them.
 //
 // The number is not the only thing a song keeps: a voice outside
 // VocalWriter's bank is saved with its name as well (see Track::voice_name),
@@ -35,8 +40,8 @@ enum : int {
     kSsi263Base = 2000,
     kMicrosoftBase = 3000,
     kMacinTalkBase = 4000,
-    kGmBase = 5000,
-    kSoundFontBase = 6000,
+    kGmBase = 100000,
+    kSoundFontBase = 101000,
     kFamilySpan = 1000,
 };
 

@@ -78,7 +78,7 @@ Settings load_settings() {
             sf.path = f["path"].get<std::string>();
             if (f.contains("slot") && f["slot"].is_number_integer()) sf.slot = f["slot"].get<int>();
             // each in a slot of its own, from 0, its numbers inside an int
-            bool taken = sf.slot < 0 || sf.slot > 9999;
+            bool taken = sf.slot < 0 || sf.slot > 999999;
             for (const SoundFontFile &o : s.soundfonts) taken = taken || o.slot == sf.slot || o.path == sf.path;
             if (!sf.path.empty() && !taken) s.soundfonts.push_back(sf);
         }

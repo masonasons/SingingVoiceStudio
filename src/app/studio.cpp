@@ -2636,7 +2636,10 @@ void Studio::write_copy() {
     bool any = false;
     for (const Track &t : song_.tracks) any = any || !t.notes.empty();
     if (!any) return;
-    recovery_write(song_, path_);
+    // with the voices' names, as a saved song has them (name_voices)
+    Song named = song_;
+    name_voices(named, voices_);
+    recovery_write(named, path_);
 }
 
 void Studio::offer_recovery() {
@@ -2776,7 +2779,9 @@ void Studio::on_save_as(wxCommandEvent &) {
 
 void Studio::write_project(const std::string &path) {
     try {
-        save_project(path, song_);
+        Song named = song_;
+        name_voices(named, voices_);
+        save_project(path, named);
     } catch (const std::exception &e) {
         say(W(std::string("could not save: ") + e.what()));
         return;

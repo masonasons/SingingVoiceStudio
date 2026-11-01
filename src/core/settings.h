@@ -16,7 +16,7 @@
 namespace svs {
 
 //: A SoundFont loaded in the Soundbank manager, and the slot its voices are
-//: numbered from: 6000 + 1000 * slot (voices/soundfont.h).
+//: numbered from: 101000 + 1000 * slot (voices/soundfont.h).
 struct SoundFontFile {
     std::string path;
     int slot = 0;

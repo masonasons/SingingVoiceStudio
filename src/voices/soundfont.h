@@ -3,9 +3,10 @@
 //
 // A SoundFont loaded in the Soundbank manager is a family named after its
 // file ("SGM-v2.01.sf2" is "SGM-v2.01"), with the thousand voice numbers of
-// its slot: 6000 - 6999 for the first slot, 7000 - 7999 for the next and so
-// on. Its presets are numbered in the order of their bank and program, so the
-// same file numbers them alike every time; only the first thousand are used.
+// its slot: 101000 - 101999 for the first slot, 102000 - 102999 for the next
+// and so on. Its presets are numbered in the order of their bank and program,
+// so the same file numbers them alike every time; only the first thousand are
+// used.
 // A preset in bank 128, a SoundFont's percussion bank, is a drum kit, as is
 // one in bank 120 or above whose name says it is a kit, as some SoundFonts
 // keep them there.

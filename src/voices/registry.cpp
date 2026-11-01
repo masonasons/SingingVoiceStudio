@@ -116,14 +116,21 @@ std::vector<std::string> Registry::status() {
 
 namespace svs {
 
-//: One voice put back by its name; true if it moved.
+//: One voice put back by its name; true if it moved. A SoundFont's voice is
+//: put only on a SoundFont's, and another engine's only on another engine's,
+//: as a SoundFont may name a voice as another engine does; unless its number
+//: is no voice at all.
 static bool by_name(std::optional<int> &id, const std::optional<std::string> &name,
                     const std::vector<VoiceListing> &voices) {
     if (!name || name->empty()) return false;
-    for (const VoiceListing &v : voices)
+    bool known = false;
+    for (const VoiceListing &v : voices) {
         if (id && v.id == *id && v.name == *name) return false;
+        known = known || (id && v.id == *id);
+    }
+    bool soundfont = id && is_soundfont_voice(*id);
     for (const VoiceListing &v : voices)
-        if (v.name == *name) {
+        if (v.name == *name && (!known || is_soundfont_voice(v.id) == soundfont)) {
             id = v.id;
             return true;
         }
@@ -161,6 +168,14 @@ std::optional<std::string> saved_voice_name(int voice_id, const std::vector<Voic
     for (const VoiceListing &v : voices)
         if (v.id == voice_id) return v.name;
     return std::nullopt;
+}
+
+void name_voices(Song &song, const std::vector<VoiceListing> &voices) {
+    for (Track &t : song.tracks) {
+        if (t.voice_id && !t.voice_name) t.voice_name = saved_voice_name(*t.voice_id, voices);
+        for (Note &n : t.notes)
+            if (n.controller && n.voice_id && !n.voice_name) n.voice_name = saved_voice_name(*n.voice_id, voices);
+    }
 }
 
 }  // namespace svs

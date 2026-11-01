@@ -481,6 +481,7 @@ int run_cli(const CliArgs &args) {
                 kept.tracks.push_back(t);
         }
         try {
+            name_voices(kept, voices);
             save_project(args.save, kept);
         } catch (const std::exception &e) {
             return fail(std::string("could not write ") + args.save + ": " + e.what());
