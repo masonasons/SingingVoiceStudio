@@ -62,6 +62,15 @@ bool check_range(wxDialog *d, wxTextCtrl *field, const wxString &name, double lo
     return false;
 }
 
+//: The voices the engine and voice boxes offer: those that can sing here,
+//: and `keep`, the one in use, so that it can still be seen and kept.
+std::vector<VoiceListing> offered(const std::vector<VoiceListing> &all, int keep) {
+    std::vector<VoiceListing> out;
+    for (const VoiceListing &v : all)
+        if (v.available || v.id == keep) out.push_back(v);
+    return out;
+}
+
 //: Whether `field` holds a time signature, or is blank; if not, as check_range.
 bool check_sig(wxDialog *d, wxTextCtrl *field) {
     wxString t = field->GetValue();
@@ -1458,6 +1467,8 @@ ControllerDialog::ControllerDialog(wxWindow *parent, Studio *studio, const Note 
 
     // the voice as a track's is chosen: the engine, then its voice
     int start = controller.voice_id ? *controller.voice_id : voice_before;
+    // an engine or voice that cannot sing here is left out
+    voices_ = offered(voices_, start);
     wxArrayString engines;
     int engine = 0;
     for (const VoiceListing &v : voices_) {
@@ -1672,12 +1683,14 @@ TrackDialog::TrackDialog(wxWindow *parent, Studio *studio, const Track &track)
     // the people's names first and then the instruments, which sing too; then
     // DECtalk's, the SSI-263's and Microsoft's. Choosing an engine fills the
     // voice box with that engine's voices alone, so neither list is long.
-    for (const VoiceListing &v : studio->voice_list()) {
+    // An engine or voice that cannot sing here is left out, unless the track
+    // sings with it already.
+    int current = studio->track_voice_of(track);
+    for (const VoiceListing &v : offered(studio->voice_list(), current)) {
         if (engines_.empty() || engines_.back().name != v.family) engines_.push_back({v.family, v.available, {}});
         engines_.back().voices.push_back(v);
     }
     if (engines_.empty()) engines_.push_back({"VocalWriter", true, {{0, "Robert", "VocalWriter", true}}});
-    int current = studio->track_voice_of(track);
     size_t engine = 0;
     for (size_t e = 0; e < engines_.size(); ++e)
         for (const VoiceListing &v : engines_[e].voices)

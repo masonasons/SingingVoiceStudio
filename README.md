@@ -320,10 +320,10 @@ Fred, Junior, Kathy, Princess, Ralph, Zarvox, Trinoids and Boing (MacinTalk 3),
 Agnes, Bruce and Victoria (MacinTalk Pro), Vicki, and Alex (Leopard and Snow Leopard)
 sing on Tiger, Leopard and Snow Leopard; Albert, Bahh, Bubbles, Deranged and Whisper
 sing in time, on a pitch of their own. Bad News, Bells, Cellos, Good News, Hysterical
-and Pipe Organ play their own tune whatever they are given, so they are listed and
-cannot sing. Tiger from 10.4.5 on (MacinTalk 3.4) cannot run off Apple's hardware.
+and Pipe Organ play their own tune whatever they are given, so they cannot sing and
+are not offered. Tiger from 10.4.5 on (MacinTalk 3.4) cannot run off Apple's hardware.
 
-Lion's voices are listed and cannot sing either: through Panthera, 10.7 takes a TUNE
+Lion's voices cannot sing either, and are not offered: through Panthera, 10.7 takes a TUNE
 and ignores its lengths and pitches. That looks like Panthera's host rather than Lion.
 10.7 moved the reading of TUNE into SpeechDictionary, which hands the notes to
 MacinTalk as CoreFoundation arrays of dictionaries, and the host's stand-in for
@@ -348,14 +348,16 @@ bends and glides included. The list shows one set of voices, numbered as
 Snow Leopard's are on Windows, and a song from Windows sings with the Mac's
 voice of the same name whichever generation it named. The six novelty voices
 that play their own tune (Bells, Cellos, Pipe Organ, Bad News, Good News,
-Hysterical) are listed and cannot sing, as on Windows.
+Hysterical) cannot sing and are not offered, as on Windows.
 
 On macOS DECtalk is `libtts.dylib`, built here with clang
 (`scripts/build_dectalk_mac.sh`) and kept in the bundle's `Contents/Frameworks`.
 
-The SSI-263's phoneme ROM is compiled in. An engine whose data is missing still
-lists its voices, marked "(not installed)", and says what is missing in
-Messages when the program starts.
+The SSI-263's phoneme ROM is compiled in. An engine whose data is missing is
+left out of the Engine boxes, and so is a voice that cannot sing, such as a
+MacinTalk generation whose files are not there while another's are; Messages
+says what is missing when the program starts. A track already sung by such a
+voice keeps it, marked "(not installed)", and says why when it is played.
 
 ## Build
 
@@ -389,7 +391,7 @@ which runs on any 64-bit Windows with nothing installed. It carries KAE Labs'
 and Microsoft's data, so it is for your own machines, not for publishing.
 
 `-DSVS_ENGINES="ssi263;microsoft"` (through `SVS_CMAKE_ARGS`) builds without an
-engine; its voices stay listed.
+engine; its voices are not offered, and a song that uses them keeps them.
 
 ### macOS
 
