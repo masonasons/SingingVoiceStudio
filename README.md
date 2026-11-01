@@ -52,11 +52,15 @@ the others through the shared pitch curve.
 -- WAV, MP3, FLAC or Ogg Vorbis -- played under the voices: the band the song
 is sung over. It sits in the tracks list like any part, with its own volume,
 pan, mute and solo, and Enter on it sets its file and where it starts, in
-seconds into the song (below 0 leaves out that much of the file's opening).
+beats from the start of the song, written as a rest's length is: 0 is the
+start, 1.25 a beat and a quarter in, and below 0 leaves out that much of
+the file's opening.
 It starts at half volume, as a finished recording is far louder than a voice
-alone. It is mixed in after the reverb, which is the voices' room alone, and
-is placed by the clock rather than the beat, so changing the tempo moves the
-voices but not the recording. Play from the cursor starts the file at the
+alone. It is mixed in after the reverb, which is the voices' room alone. It
+starts on its beat whatever the tempo, but plays at its own speed from
+there, so changing the tempo moves the voices after that against the
+recording. A project saved with the start in seconds, as before, has it
+put on the beat the song's tempo gave it. Play from the cursor starts the file at the
 same moment; Export WAV includes it, Export tracks leaves it out (it is a file
 already). The project saves where the file is; a project sent along with its
 file in the same folder finds it there. VocalWriter Studio reads such a

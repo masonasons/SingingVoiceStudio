@@ -1157,8 +1157,11 @@ void Studio::on_track_edit(wxCommandEvent &) {
             refresh_track(i);
             if (i == current_) relabel(list_, W("Notes in " + t.name));
             reannounce(tracks_list_, i);
-            say(W(t.name + ", " + base_name(t.audio) + ", starting at " + fmt_g(t.audio_start) + " seconds, volume " +
-                  std::to_string(t.volume) + "%, " + pan_text(t.pan)));
+            auto bb = song_.meter().bar_and_beat(t.audio_beat);
+            say(W(t.name + ", " + base_name(t.audio) + ", starting " + fmt_g(std::nearbyint(t.audio_beat * 1000) / 1000) +
+                  " beats in, at bar " + std::to_string(bb.first) + " beat " +
+                  fmt_g(std::nearbyint(bb.second * 1000) / 1000) + ", volume " + std::to_string(t.volume) + "%, " +
+                  pan_text(t.pan)));
         });
         return;
     }

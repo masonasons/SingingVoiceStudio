@@ -485,7 +485,7 @@ json track_doc(const Track &t) {
     // reads the track as a part with no notes
     if (t.is_backing()) {
         d["audio"] = t.audio;
-        if (t.audio_start != 0) d["audio_start"] = round_to(t.audio_start, 3);
+        if (t.audio_beat != 0) d["audio_beat"] = round_to(t.audio_beat, 6);
     }
     return d;
 }
@@ -637,7 +637,7 @@ Track read_track(const json &doc, size_t index) {
         }
     }
     if (const json *v = get("audio"); v && v->is_string()) t.audio = v->get<std::string>();
-    if (const json *v = get("audio_start")) t.audio_start = as_double(*v, 0);
+    if (const json *v = get("audio_beat")) t.audio_beat = as_double(*v, 0);
     return t;
 }
 
@@ -731,6 +731,15 @@ Song load_project(const std::string &path) {
     song.voice = doc.contains("voice") ? read_voice(doc["voice"]) : VoiceStyle();
     song.reverb = doc.contains("reverb") ? read_reverb(doc["reverb"]) : Reverb{0, 0};
     song.anticipate = doc.contains("anticipate") ? truthy(doc["anticipate"]) : true;
+    // a backing track whose start was saved in seconds, as it was before it
+    // was in beats, starts on the beat the song's tempo had there
+    Clock clock = song.clock();
+    for (size_t i = 0, k = 0; i < parts.size() && k < song.tracks.size(); ++i) {
+        if (!parts[i].is_object()) continue;
+        Track &t = song.tracks[k++];
+        if (!parts[i].contains("audio_beat") && parts[i].contains("audio_start"))
+            t.audio_beat = std::nearbyint(clock.beat_at(as_double(parts[i]["audio_start"], 0)) * 1e6) / 1e6;
+    }
     if (song.tracks.empty()) {
         Track t;
         t.name = "Voice 1";

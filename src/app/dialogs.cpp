@@ -1843,7 +1843,8 @@ void TrackDialog::apply(Track &track) const {
 // -- BackingDialog ------------------------------------------------------------------------
 
 BackingDialog::BackingDialog(wxWindow *parent, const Track &track)
-    : wxDialog(parent, wxID_ANY, "Backing track") {
+    : wxDialog(parent, wxID_ANY, "Backing track"), was_start_(track.audio_beat),
+      start_shown_(W(fmt_g(std::nearbyint(track.audio_beat * 1000) / 1000))) {
     wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
     name_ = new wxTextCtrl(this, wxID_ANY, W(track.name), wxDefaultPosition, wxSize(220, -1));
     labelled(this, outer, "Name", name_);
@@ -1852,9 +1853,10 @@ BackingDialog::BackingDialog(wxWindow *parent, const Track &track)
     wxButton *browse = new wxButton(this, wxID_ANY, "&Browse...");
     browse->Bind(wxEVT_BUTTON, &BackingDialog::on_browse, this);
     outer->Add(browse, 0, wxALL, 6);
-    start_ = new wxTextCtrl(this, wxID_ANY, W(fmt_g(track.audio_start)), wxDefaultPosition, wxSize(80, -1));
+    start_ = new wxTextCtrl(this, wxID_ANY, start_shown_, wxDefaultPosition, wxSize(80, -1));
     labelled(this, outer, "Starts at", start_, 0,
-             "seconds into the song the file begins; below 0 leaves out that much of its opening");
+             "beats into the song the file begins, as a rest's length is written: 0 is the start, 1.25 a beat "
+             "and a quarter in; below 0 leaves out that much of its opening");
     volume_ = spin(this, 0, kMaxVolume, track.volume, 80);
     labelled(this, outer, "Volume", volume_, 0, "per cent");
     pan_ = spin(this, -100, 100, track.pan, 80);
@@ -1890,8 +1892,8 @@ void BackingDialog::on_ok(wxCommandEvent &evt) {
         path_->SetFocus();
         path_->SelectAll();
     } else if (!read_number(start_->GetValue(), &v)) {
-        wxMessageBox("Starts at is a number of seconds, such as 0, 2.5 or -1.", "Backing track",
-                     wxOK | wxICON_ERROR, this);
+        wxMessageBox("Starts at is a number of beats into the song, such as 0, 1.25 or -2.",
+                     "Backing track", wxOK | wxICON_ERROR, this);
         start_->SetFocus();
         start_->SelectAll();
     } else {
@@ -1904,8 +1906,11 @@ void BackingDialog::apply(Track &track) const {
     name.Trim(true).Trim(false);
     track.name = name.empty() ? "Backing" : U(name);
     track.audio = file();
+    // left as shown, it keeps the beat it had, which may lie between the
+    // thousandths of a beat it is shown in
     double v = 0;
-    if (read_number(start_->GetValue(), &v)) track.audio_start = std::nearbyint(v * 1000) / 1000;
+    if (start_->GetValue() == start_shown_) track.audio_beat = was_start_;
+    else if (read_number(start_->GetValue(), &v)) track.audio_beat = std::nearbyint(v * 1e6) / 1e6;
     track.volume = volume_->GetValue();
     track.pan = pan_->GetValue();
 }

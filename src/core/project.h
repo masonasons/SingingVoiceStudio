@@ -150,9 +150,10 @@ struct Track {
     //: A backing track: the sound file it plays under the voices, at its
     //: volume and pan, instead of singing. Empty for a part that sings.
     std::string audio;
-    //: where in the song the file begins, in seconds: later than the first
-    //: beat when above 0, and below 0 its opening is left out
-    double audio_start = 0;
+    //: where in the song the file begins, in beats, so it keeps its place
+    //: against the bars: later than the first beat when above 0, and below
+    //: 0 its opening is left out
+    double audio_beat = 0;
     //: which note was last selected here; not saved
     int cursor = 0;
 
@@ -163,7 +164,7 @@ struct Track {
                volume == o.volume && pan == o.pan && velocity == o.velocity &&
                mute == o.mute && solo == o.solo &&
                notes == o.notes && voice == o.voice && reverb == o.reverb &&
-               consonants == o.consonants && audio == o.audio && audio_start == o.audio_start;
+               consonants == o.consonants && audio == o.audio && audio_beat == o.audio_beat;
     }
 };
 

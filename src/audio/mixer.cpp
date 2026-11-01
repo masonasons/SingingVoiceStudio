@@ -469,8 +469,9 @@ RenderRequest make_request(const Song &song, const std::vector<const Track *> &p
     r.anticipate = song.anticipate;
     for (const Track *t : parts) {
         if (t->is_backing()) {
+            // on the beat it starts at, in seconds as the file is played
             r.backings.push_back({t->audio, t->volume / 100.0, t->pan / 100.0,
-                                  std::nearbyint(t->audio_start * 1e3) / 1e3, t->name});
+                                  std::nearbyint(clock.seconds(t->audio_beat) * 1e3) / 1e3, t->name});
             continue;
         }
         // a track of rests and controllers, as the tempo is kept on, sings nothing
