@@ -87,6 +87,17 @@ void ReportList::OnKey(std::function<void(wxKeyEvent &)> fn) {
     Bind(wxEVT_KEY_DOWN, [fn](wxKeyEvent &evt) { fn(evt); });
 }
 
+void ReportList::OnContextMenu(std::function<void(wxPoint at)> fn) {
+    Bind(wxEVT_CONTEXT_MENU, [this, fn](wxContextMenuEvent &evt) {
+        wxPoint at = wxDefaultPosition;
+        wxRect row;
+        // from the keyboard, which gives no position: below its row
+        if (evt.GetPosition() == wxDefaultPosition && FocusedRow() >= 0 && GetItemRect(FocusedRow(), row))
+            at = row.GetBottomLeft();
+        fn(at);
+    });
+}
+
 // The list view's own check boxes: Space ticks them, and a screen reader
 // says "checked" and "not checked".
 void ReportList::EnableChecks() {
@@ -228,6 +239,10 @@ void ReportList::OnSelected(std::function<void()> fn) {
         evt.Skip();
         fn();
     });
+}
+
+void ReportList::OnContextMenu(std::function<void(wxPoint at)> fn) {
+    Bind(wxEVT_DATAVIEW_ITEM_CONTEXT_MENU, [fn](wxDataViewEvent &) { fn(wxDefaultPosition); });
 }
 
 // wxEVT_KEY_DOWN arrives too late for the contested keys: the table has

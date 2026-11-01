@@ -96,6 +96,8 @@ private:
     // -- interface ---------------------------------------------------------
     void build();
     void build_menu();
+    wxMenu *note_menu();
+    wxMenu *track_menu();
     void on_playback_shortcut(wxKeyEvent &evt);
     void on_keys(wxCommandEvent &);
 

@@ -538,6 +538,7 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+Shift+C | add a controller: a tempo or time signature change for the entire song |
 | Ctrl+E, or Enter on a note | edit it, including its pitch bend |
 | Ctrl+L | make the note the cursor is on a rest, as long and at the same pitch |
+| Application key or Shift+F10 | the Track menu on a track, the Note menu on a note, as a context menu |
 | Ctrl+D, or Delete | remove it |
 | Alt+Up / Alt+Down | transpose a semitone |
 | Alt+Right / Alt+Left | a sixteenth note longer or shorter |

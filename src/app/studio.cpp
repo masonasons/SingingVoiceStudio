@@ -298,6 +298,11 @@ void Studio::build() {
     });
     tracks_list_->OnSelected([this] { on_track_chosen(); });
     tracks_list_->OnKey([this](wxKeyEvent &e) { on_track_key(e); });
+    // the Track menu, from the application key, Shift+F10 or a right click
+    tracks_list_->OnContextMenu([this](wxPoint at) {
+        std::unique_ptr<wxMenu> menu(track_menu());
+        tracks_list_->PopupMenu(menu.get(), at);
+    });
     caption(p, outer, "Tracks", tracks_list_, 0);
 
     // not single-select: a phrase is copied, transposed or deleted as a
@@ -313,6 +318,11 @@ void Studio::build() {
         on_edit(e);
     });
     list_->OnKey([this](wxKeyEvent &e) { on_key(e); });
+    // and the Note menu the same way on a note
+    list_->OnContextMenu([this](wxPoint at) {
+        std::unique_ptr<wxMenu> menu(note_menu());
+        list_->PopupMenu(menu.get(), at);
+    });
     caption(p, outer, "Notes", list_);
 
     messages_ = new wxTextCtrl(p, wxID_ANY, "", wxDefaultPosition, wxSize(-1, 80),
@@ -325,11 +335,8 @@ void Studio::build() {
     say("starting the engine");
 }
 
-// Menus rather than buttons: a screen reader announces an item's shortcut
-// along with its name, so the keys are discoverable.
-void Studio::build_menu() {
-    wxMenuBar *bar = new wxMenuBar();
-
+//: The Note menu, as the menu bar has it and as a note's context menu has it.
+wxMenu *Studio::note_menu() {
     wxMenu *note = new wxMenu();
     note->Append(ID_ADD_WORD, K("Add &word...\tCtrl+W"), "Look a word up and spread it over one note or several");
     note->Append(ID_ADD_WORD_EXISTING, K("Add word to ex&isting note(s)...\tCtrl+Shift+W"),
@@ -363,7 +370,11 @@ void Studio::build_menu() {
     note->Append(ID_OCTAVE_DOWN, K("Down an octa&ve (Alt+Shift+Down on a note)"), "Down twelve semitones");
     note->Append(ID_DOUBLE, K("Twice as lon&g\tAlt+Shift+Right"), "Double the length");
     note->Append(ID_HALVE, K("&Half as long\tAlt+Shift+Left"), "Halve the length");
+    return note;
+}
 
+//: The Track menu, as the menu bar has it and as a track's context menu has it.
+wxMenu *Studio::track_menu() {
     wxMenu *track = new wxMenu();
     track->Append(ID_TRACK_NEW, K("&New track\tCtrl+T"), "Add another part, with its own voice");
     track->Append(ID_TRACK_BACKING, K("Add &backing track...\tCtrl+Shift+B"),
@@ -388,6 +399,16 @@ void Studio::build_menu() {
                   "Every note of the selected tracks up twelve semitones");
     track->Append(ID_TRACK_OCTAVE_DOWN, K("Down an octa&ve (Alt+Shift+Down on a track)"),
                   "Every note of the selected tracks down twelve semitones");
+    return track;
+}
+
+// Menus rather than buttons: a screen reader announces an item's shortcut
+// along with its name, so the keys are discoverable.
+void Studio::build_menu() {
+    wxMenuBar *bar = new wxMenuBar();
+
+    wxMenu *note = note_menu();
+    wxMenu *track = track_menu();
 
     wxMenu *play = new wxMenu();
     // Space is handled by the lists rather than registered as an
@@ -876,6 +897,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+G  go to a bar",
         "Ctrl+E  edit note",
         "Ctrl+L  make the note the cursor is on a rest, as long and at the same pitch",
+        "Application key or Shift+F10  the Track menu on a track, the Note menu on a note",
         "Ctrl+D or Delete  remove note",
         "Ctrl+C, Ctrl+X, Ctrl+V  copy, cut and paste notes",
         "Ctrl+A  select every note",
