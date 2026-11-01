@@ -169,6 +169,7 @@ private:
     std::string controller_said(int i);
     std::vector<int> selected_notes();
     const Note *note_before(int at);
+    const Note *note_after(int at);
     void on_edit(wxCommandEvent &);
     void on_remove(wxCommandEvent &);
 

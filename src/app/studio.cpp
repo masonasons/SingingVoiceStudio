@@ -1298,7 +1298,8 @@ void Studio::on_bar_rest(wxCommandEvent &) {
         double pos = position(at);
         double left = span - std::fmod(pos, span);
         if (left < 1e-9 || std::fabs(left - span) < 1e-9) left = span;   // a whole bar
-        const Note *nearby = note_before(at);
+        const Note *nearby = note_after(at);
+        if (!nearby) nearby = note_before(at);
         Note rest({kRest}, nearby ? nearby->pitch : kDefaultPitch, left);
         notes().insert(notes().begin() + at, rest);
         touch();
@@ -1449,6 +1450,14 @@ const Note *Studio::note_before(int at) {
     for (int i = std::min(at, int(notes().size())) - 1; i >= 0; --i)
         if (!notes()[size_t(i)].controller) return &notes()[size_t(i)];
     return last();
+}
+
+//: The first note sung or played at or after row `at`, or none: the pitch
+//: a rest put in before it leads up to.
+const Note *Studio::note_after(int at) {
+    for (int i = std::max(0, at); i < int(notes().size()); ++i)
+        if (!notes()[size_t(i)].controller && !notes()[size_t(i)].is_rest()) return &notes()[size_t(i)];
+    return nullptr;
 }
 
 void Studio::nudge_pitch(int by) {
@@ -1798,10 +1807,12 @@ void Studio::on_add_rest(wxCommandEvent &) {
     if (!takes_notes()) return;
     undoable("add rest", [&] {
         int i = selection();
-        const Note *nearby = i >= 0 ? note_before(i + 1) : last();
-        Note rest({kRest}, nearby ? nearby->pitch : kDefaultPitch,
-                  nearby ? (nearby->beats > 0 ? nearby->beats : nearby->sounds()) : kDefaultBeats);
         int at = i < 0 ? int(notes().size()) : i + 1;
+        const Note *nearby = i >= 0 ? note_before(i + 1) : last();
+        // the pitch of the note it leads up to; the length of the one before
+        const Note *next = note_after(at);
+        Note rest({kRest}, next ? next->pitch : nearby ? nearby->pitch : kDefaultPitch,
+                  nearby ? (nearby->beats > 0 ? nearby->beats : nearby->sounds()) : kDefaultBeats);
         notes().insert(notes().begin() + at, rest);
         touch();
         sync(at);
