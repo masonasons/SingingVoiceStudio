@@ -1280,7 +1280,9 @@ bool Mixer::sung_together(const RenderRequest &req, std::vector<float> *out, int
     for (const PartRequest &t : req.tracks) {
         instruments = instruments || played(t.voice_id);
         Family *f = Registry::get().family_of(t.voice_id);
-        if (!f || !f->sings_parts() || panned(t) || (t.reverb && clean_reverb(*t.reverb) != rev))
+        // VocalWriter's sequencer sings its own voices and instruments only
+        if (!f || !f->sings_parts() || panned(t) || (t.reverb && clean_reverb(*t.reverb) != rev) ||
+            is_soundfont_voice(t.voice_id))
             return false;
         for (const auto &v : t.voices)
             if (Registry::get().family_of(v.second) != f) return false;

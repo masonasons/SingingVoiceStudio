@@ -12,6 +12,7 @@
 #include "core/project.h"
 #include "voices/controls.h"
 #include "voices/registry.h"
+#include "voices/soundfont.h"
 
 namespace svs {
 
@@ -306,7 +307,7 @@ private:
 
 //: Which of `parts` are sung in a MIDI file that has no lyrics, each ticked
 //: or unticked with Space, none to begin with; the others are played by the
-//: GM Soundbank.
+//: default soundbank.
 class SungPartsDialog : public wxDialog {
 public:
     SungPartsDialog(wxWindow *parent, const wxArrayString &parts);
@@ -327,6 +328,31 @@ public:
 private:
     void on_browse(wxCommandEvent &);
     wxTextCtrl *path_;
+};
+
+//: The Soundbank manager: the SoundFonts loaded, each of which plays as an
+//: engine of its own, and the default soundbank, which plays the parts of an
+//: imported MIDI file or VocalWriter song that are not sung.
+class SoundbankDialog : public wxDialog {
+public:
+    SoundbankDialog(wxWindow *parent, const std::vector<SoundFontFile> &fonts, const std::string &default_bank);
+    std::vector<SoundFontFile> fonts() const { return fonts_; }
+    //: a SoundFont's path, or empty for the GM Soundbank
+    std::string default_soundbank() const;
+
+private:
+    void fill(int select);
+    void on_load(wxCommandEvent &);
+    void on_remove(wxCommandEvent &);
+    //: Remove only while a SoundFont in the list is selected
+    void show_remove();
+    std::vector<SoundFontFile> fonts_;
+    std::vector<SoundFontInfo> infos_;
+    std::string default_;
+    ReportList *list_;
+    wxButton *remove_;
+    wxButton *load_;
+    wxChoice *bank_;
 };
 
 //: Which MIDI channel each track goes out on, asked before a MIDI export as

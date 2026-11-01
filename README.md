@@ -3,7 +3,8 @@
 VocalWriter Studio rebuilt in C++ and wxWidgets, with more singers in it, for
 Windows and macOS. The window, the menus, the keys, the dialogs, the messages
 and the project files are derived from VocalWriter Studio; what is new is that a track can be sung by any of
-five synthesisers, or played by VocalWriter's own General MIDI instruments:
+five synthesisers, or played by VocalWriter's own General MIDI instruments or
+by SoundFonts:
 
 | engine | voices | numbers | what it is |
 |---|---|---|---|
@@ -13,6 +14,7 @@ five synthesisers, or played by VocalWriter's own General MIDI instruments:
 | **Microsoft** | Sam, Mike, Mary, each plain, in Hall, in Stadium, in Space, Whisper, RoboSoft One to Six | 3000 - 3050 | the SAPI 5 engine rebuilt in C, with the SAPI 4 voice modes (github.com/KamiKitsune420/ms-sam-mike-mary-decomp) |
 | **MacinTalk** | Agnes, Albert, Bad News, Bahh, Bells, Boing, Bruce, Bubbles, Cellos, Deranged, Fred, Good News, Hysterical, Junior, Kathy, Pipe Organ, Princess, Ralph, Trinoids, Vicki, Victoria, Whisper, Zarvox, from each of Mac OS X 10.4 Tiger, 10.5 Leopard, 10.6 Snow Leopard and 10.7 Lion, and Alex from 10.5 on | 4000 - 4022, 4100 - 4123, 4200 - 4223, 4300 - 4323 | Apple's own engines: on Windows run by Panthera's host (github.com/tgeczy/panthera-speech) and sung through Apple's TUNE notation; on a Mac the system's own voices, spoken from phonemes and retuned to the score (see below) |
 | **GM Soundbank** | the 128 General MIDI instruments and a drum kit | 5000 - 5127, 5128 | VocalWriter 2.0's own instrument bank and wavetable synthesiser, which played its MIDI tracks (see below) |
+| **SoundFonts** | every preset of each SoundFont (.sf2) loaded, up to a thousand | 6000 - 6999 for the first, 7000 - 7999 for the next, and so on | played by TinySoundFont (github.com/schellingb/TinySoundFont), compiled in (see below) |
 
 A voice's number is what a song saves, and it is fixed per engine, so a song
 written with DECtalk Betty still says Betty on a machine without DECtalk and
@@ -120,11 +122,39 @@ volume, the bend range, the detune and the sustain pedal. Like VocalWriter's
 voices it plays the whole track, in stereo, and exported with them and
 nothing panned the song is played as VocalWriter played it.
 
+**SoundFonts** play as engines of their own. Settings > Soundbank manager
+(Ctrl+Shift+K) lists the SoundFonts loaded; Load soundfont adds one (.sf2),
+and Remove, before it, takes out the one selected in the list. A SoundFont
+loaded is at the bottom of the Engine box, named after its file without its
+extension ("SGM-v2.01.sf2" is "SGM-v2.01"), with all its own presets as its
+voices, whatever bank they are in, not only General MIDI's. Each SoundFont has
+a thousand voice numbers: the first loaded 6000 - 6999, the next 7000 - 7999,
+and so on, a SoundFont removed leaving its numbers to the next one loaded. Its
+presets are numbered in the order of their bank and program, so **only the
+first 1000 sounds of a SoundFont with more are used**. A preset in bank 128,
+a SoundFont's percussion bank, is a drum kit, and so is one in bank 120 or
+above whose name says it is a kit ("drum", "kit" or "perc"): a SoundFont may
+have several. A drum kit's notes are shown by the drum, as General MIDI
+places them, and are left as they are when a track is transposed. A
+SoundFont plays as the GM Soundbank does -- chords, held notes, velocities,
+the bend, the detune and the sustain pedal, the volume and the pan in the mix
+-- in stereo. The last box, Default soundbank, says what plays the parts of a
+MIDI file or a VocalWriter song that are not sung when it is imported: GM
+Soundbank (built-in), or one of the SoundFonts, which then plays each part
+with its preset in bank 0 of the part's program, failing that the same
+program in another bank, and the drums with its kit at program 0 in bank 128,
+failing that any kit; a part it has nothing for stays on the GM Soundbank.
+Instruments an octave off (below) are the GM Soundbank's own, so a SoundFont's
+parts are not moved. The SoundFonts' paths and the default soundbank are kept
+in the settings file, with the other settings, not in the song; the command
+line uses them as the window left them. A SoundFont's samples are read when
+one of its voices first plays.
+
 **VocalWriter's own songs** (.trk) open with File > Import (Ctrl+I) or on the
 command line. Each vocal track comes in as a part with everything VocalWriter
 sang it with: the syllables, phonemes and lyrics, the velocities, the
 controls above, the pitch bends and a voice change wherever the track has
-one. Each instrument track comes in played by the GM Soundbank, with its
+one. Each instrument track comes in played by the default soundbank, with its
 notes, velocities, program changes and controls, the drum track on the drum
 kit. The song's tempo changes come in on a Tempo track at the top, as a MIDI
 file's do, with its reverb and its end (File > Song settings, Song end).
@@ -133,13 +163,13 @@ The karaoke track is left out. With VocalWriter's own sequencer turned on
 VocalWriter playing it, and so is the project it is saved as. Its songs turn a track up past 100% now and then, so a track's volume
 goes to 200%.
 
-**A MIDI file's instruments** come in on the GM Soundbank, as VocalWriter
-took them in: the parts with words are sung, and the others are played with
+**A MIDI file's instruments** come in on the default soundbank, the GM
+Soundbank unless a SoundFont is chosen (above), as VocalWriter took them in: the parts with words are sung, and the others are played with
 the programs the file gives them, channel 10 on the drum kit. When none of
 the parts chosen has words, Import asks last which are sung, each ticked or
 unticked with Space and none ticked to begin with, so that they come in as
 parts to sing, their short rests closed and their notes on AA until words
-are put on them; with none ticked every part is played by the GM Soundbank.
+are put on them; with none ticked every part is played by the default soundbank.
 A part the file leaves unnamed is named after its
 instrument, the drum kit's "Drums", and so is each part of a track that plays
 on several channels, a type 0 file's or another's. Import asks first which
@@ -374,7 +404,8 @@ voice keeps it, marked "(not installed)", and says why when it is played.
 msys2's mingw64 GCC, CMake and Ninja. wxWidgets is fetched from GitHub and built
 with the program, statically, at a pinned master commit (see CMakeLists.txt), so
 the first build takes a while longer; so are Xiph's libFLAC, libogg and
-libvorbis, at pinned releases, for Export audio (cmake/xiph.cmake):
+libvorbis, at pinned releases, for Export audio (cmake/xiph.cmake), and
+TinySoundFont, at a pinned commit, for the SoundFonts:
 
 ```
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
@@ -507,6 +538,7 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+Shift+D | whether importing MIDI and adding a word sing a vowel held over several notes on its first sound |
 | Ctrl+Shift+O | whether importing MIDI transposes the instruments the soundbank has an octave off by an octave |
 | Ctrl+Shift+V | whether VocalWriter's voices are sung through its own sequencer |
+| Ctrl+Shift+K | the Soundbank manager: SoundFonts and the default soundbank |
 | Ctrl+Shift+S / Ctrl+Shift+T | export one WAV, FLAC or Ogg Vorbis file / one WAV per track |
 | Ctrl+Shift+M | export a MIDI file |
 
@@ -533,8 +565,8 @@ src/core/      the song, projects, MIDI import, phonology, settings and recovery
 src/audio/     the mixer (VocalWriter Studio's ppc/engine.py), WAV, FLAC and Ogg Vorbis
                files (encode.cpp), the player
                (player.cpp on Windows, player_mac.mm on macOS)
-src/voices/    singer.h (what an engine is asked to do), the four engines, the shared
-               pitch curve
+src/voices/    singer.h (what an engine is asked to do), the engines, the shared
+               pitch curve; soundfont.cpp plays SoundFonts through TinySoundFont
 engine/        VocalWriter's synthesiser in C (VocalWriterC)
 third_party/   DECtalk, the SSI-263, Microsoft Sam's reconstruction, nlohmann/json
 scripts/       the Windows build (build_all.ps1, build_dectalk.ps1) and the macOS

@@ -28,6 +28,7 @@
 #include "core/vwsong.h"
 #include "voices/controls.h"
 #include "voices/registry.h"
+#include "voices/soundfont.h"
 #include "voices/vocalwriter.h"
 
 namespace svs {
@@ -46,7 +47,7 @@ enum {
     ID_TRACK_UP, ID_TRACK_DOWN, ID_PREVIEW_TIMER, ID_RECOVERY_TIMER, ID_ADD_CONTROLLER, ID_CLOSE_RESTS,
     ID_REMOVE_VELOCITIES, ID_APPEND, ID_OWN_PATH, ID_PLAIN_HELD, ID_FOLLOW, ID_FOLLOW_TIMER, ID_EXPORT_TIMER,
     ID_EXPORT_MIDI, ID_ADD_WORD_EXISTING, ID_OCTAVE_INSTRUMENTS, ID_ADD_TEXT, ID_REMOVE_VOLUMES,
-    ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN,
+    ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN, ID_SOUNDBANKS,
 };
 
 //: A beat is a quarter note, so a sixteenth is a quarter of a beat: the step
@@ -175,6 +176,7 @@ Studio::Studio(const std::string &path)
     // before anything asks the engines for their voices
     set_macintalk_folder(settings_.panthera_folder);
     set_vocalwriter_own_path(settings_.vocalwriter_own_path);
+    set_soundfonts(settings_.soundfonts);
     mixer_ = std::make_shared<Mixer>();
     worker_ = std::make_unique<Worker>(this);
     worker_->on_error = [this](const std::string &msg) { say("engine error: " + W(msg)); };
@@ -476,6 +478,8 @@ void Studio::build_menu() {
                                           "as the other engines sing");
     mi_own_path_->Check(settings_.vocalwriter_own_path);
     prefs->Append(ID_PANTHERA, K("Panthera &folder..."), "Where to find Panthera, for the MacinTalk voices");
+    prefs->Append(ID_SOUNDBANKS, K("Sound&bank manager...\tCtrl+Shift+K"),
+                  "Load SoundFonts to play with, and choose what plays the parts of an imported song that are not sung");
     bar->Append(prefs, "&Settings");
     bar->Append(help, "&Help");
     SetMenuBar(bar);
@@ -535,6 +539,7 @@ void Studio::build_menu() {
     on(wxID_PREFERENCES, &Studio::on_song_settings);
     on(ID_AUTO_PREVIEW, &Studio::on_auto_preview);
     on(ID_PANTHERA, &Studio::on_panthera);
+    on(ID_SOUNDBANKS, &Studio::on_soundbanks);
     on(ID_CLOSE_RESTS, &Studio::on_close_rests);
     on(ID_REMOVE_VELOCITIES, &Studio::on_remove_velocities);
     on(ID_REMOVE_VOLUMES, &Studio::on_remove_volumes);
@@ -769,6 +774,48 @@ void Studio::on_panthera(wxCommandEvent &) {
                                            });
 }
 
+//: The Soundbank manager. The SoundFonts kept are read again and their
+//: voices listed, and the phrases already played are played afresh.
+void Studio::on_soundbanks(wxCommandEvent &) {
+    SoundbankDialog dlg(this, settings_.soundfonts, settings_.default_soundbank);
+    if (dlg.ShowModal() != wxID_OK) return;
+    std::vector<SoundFontFile> fonts = dlg.fonts();
+    std::string bank = dlg.default_soundbank();
+    if (fonts == settings_.soundfonts && bank == settings_.default_soundbank) return;
+    settings_.soundfonts = fonts;
+    settings_.default_soundbank = bank;
+    bool kept = save_settings(settings_);
+    set_soundfonts(fonts);
+    mixer_ = std::make_shared<Mixer>();
+    std::string said = plural(fonts.size(), "SoundFont") + " loaded; imported parts that are not sung are played by " +
+                       (bank.empty() ? std::string("the GM Soundbank") : strip_extension(base_name(bank)));
+    if (!kept) said += ", for this sitting only: the settings file could not be written";
+    say(W(said));
+    worker_->ask<std::vector<VoiceListing>>([] { return Registry::get().voices(); },
+                                            [this](std::vector<VoiceListing> v) { set_voices(v); });
+    worker_->ask<std::vector<std::string>>([] { return Registry::get().status(); },
+                                           [this](std::vector<std::string> lines) { status_lines_ = lines; });
+}
+
+//: The SoundFont that plays the parts an import does not sing, by its slot,
+//: or -1 for the GM Soundbank: the default soundbank, if it can play here.
+int Studio::soundbank_slot() {
+    if (settings_.default_soundbank.empty()) return -1;
+    int slot = soundfont_slot(settings_.default_soundbank);
+    for (const VoiceListing &v : voices_)
+        if (slot >= 0 && v.id == soundfont_base(slot) && v.available) return slot;
+    say(W("the default soundbank, " + strip_extension(base_name(settings_.default_soundbank)) +
+          ", cannot play here, so the GM Soundbank plays instead"));
+    return -1;
+}
+
+//: "the GM Soundbank", or the SoundFont in `slot` by its name.
+std::string Studio::soundbank_name(int slot) const {
+    for (const VoiceListing &v : voices_)
+        if (slot >= 0 && v.id == soundfont_base(slot)) return v.family;
+    return "the GM Soundbank";
+}
+
 //: Hear one note once the nudging has stopped: a held arrow key would
 //: otherwise queue a stream of little sounds, each already out of date.
 void Studio::preview_note(int i) {
@@ -832,7 +879,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "Alt+Shift+Right or Alt+Shift+Left  twice or half as long",
         "Pitch bend and the mod wheel are set per note, in the note editor. The mod wheel deepens "
         "the vibrato",
-        "On a track the GM Soundbank plays, a chord is its notes in a row, all but the last taking 0 "
+        "On a track an instrument plays, a chord is its notes in a row, all but the last taking 0 "
         "beats; several pitches typed into a note, as C4 E4 G4, make one. Alt+Right and Alt+Left "
         "change how long a note held on its own sounds, and Ctrl+H plays the note the cursor is on",
         "Space  play from the note the cursor is on, or stop if it is playing",
@@ -844,7 +891,10 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+O open a project, Ctrl+S save it",
         "Ctrl+,  song settings: tempo, time signature, consonants, reverb, voice controls",
         "Ctrl+I  import a MIDI file or a VocalWriter song. The parts without words are played by "
-        "the GM Soundbank, VocalWriter's own instruments, as VocalWriter played them",
+        "the default soundbank: the GM Soundbank, VocalWriter's own instruments, as VocalWriter played them, "
+        "unless a SoundFont is chosen in the Soundbank manager",
+        "Ctrl+Shift+K  the Soundbank manager: load SoundFonts, whose instruments then play as engines of their "
+        "own, and choose the default soundbank",
         "Ctrl+Shift+A  append a MIDI file: its parts under the song's tracks, its tempo and time signature in "
         "place of the song's",
         "Ctrl+Shift+I  whether importing MIDI closes the short rests between notes",
@@ -956,7 +1006,7 @@ std::string Studio::voice_name(int id) const {
     // voices; an instrument by its own name alone
     for (const VoiceListing &v : voices_)
         if (v.id == id) {
-            if (is_gm_voice(id)) return short_voice_name(v.name, v.family);
+            if (is_instrument(id)) return short_voice_name(v.name, v.family);
             if (is_vocalwriter_voice(id)) return v.family + " " + v.name;
             return v.name;
         }
@@ -1062,7 +1112,7 @@ void Studio::select_all_tracks() {
 
 //: Alt with Up and Down on a track, a semitone, and with Shift an octave:
 //: every note of the selected tracks, or of the one the keyboard is on. A
-//: rest's lead-in pitch goes with them; the drum kit's notes are drums, and
+//: rest's lead-in pitch goes with them; a drum kit's notes are drums, and
 //: stay as they are.
 void Studio::transpose_tracks(int by) {
     undoable("transpose tracks", [&] {
@@ -1078,7 +1128,7 @@ void Studio::transpose_tracks(int by) {
             bool any = false;
             for (Note &n : t.notes) {
                 if (n.controller && n.voice_id) voice = *n.voice_id;
-                if (voice == kGmDrums) {
+                if (is_drum_kit(voice)) {
                     drums += !n.controller && !n.is_rest();
                     continue;
                 }
@@ -1094,7 +1144,7 @@ void Studio::transpose_tracks(int by) {
         }
         std::string how = std::string(by > 0 ? "up" : "down") + (std::abs(by) == kOctave ? " an octave" : " a semitone");
         if (moved.empty()) {
-            say(drums ? "the drum kit's notes are drums, so they stay as they are"
+            say(drums ? "a drum kit's notes are drums, so they stay as they are"
                       : rows.size() == 1 ? "there are no notes in this track to transpose"
                                          : "there are no notes in these tracks to transpose");
             return;
@@ -1102,7 +1152,7 @@ void Studio::transpose_tracks(int by) {
         touch();
         if (std::find(rows.begin(), rows.end(), current_) != rows.end()) sync(std::max(0, selection()));
         std::string message = (moved.size() == 1 ? moved[0] : plural(moved.size(), "track")) + " " + how;
-        if (drums) message += ", the drum kit's notes left as they are";
+        if (drums) message += ", the drums left as they are";
         announce_note(W(message), tracks_list_, track_at());
     });
 }
@@ -1499,12 +1549,13 @@ std::string played_length(double beats) {
 void Studio::refresh_row(int i, int voice) {
     const Note &n = notes()[size_t(i)];
     if (voice < 0) voice = voice_at(i);
-    // An instrument has no phonemes to show: a note is a note, or on the
-    // drum kit the drum its key strikes.
-    bool played = is_gm_voice(voice) && !n.controller && !n.is_rest();
+    // An instrument has no phonemes to show: a note is a note, or on a drum
+    // kit the drum its key strikes, as General MIDI places them.
+    bool played = is_instrument(voice) && !n.controller && !n.is_rest();
     if (played) {
-        const char *drum = voice == kGmDrums ? gm_drum_name(n.pitch) : nullptr;
-        list_->SetItem(i, 0, drum ? W(drum) : wxString(voice == kGmDrums ? "(drum)" : "(note)"));
+        bool kit = is_drum_kit(voice);
+        const char *drum = kit ? gm_drum_name(n.pitch) : nullptr;
+        list_->SetItem(i, 0, drum ? W(drum) : wxString(kit ? "(drum)" : "(note)"));
     } else {
         list_->SetItem(i, 0, W(label_of(n)));
     }
@@ -1518,7 +1569,7 @@ void Studio::refresh_row(int i, int voice) {
         list_->SetItem(i, 2, W(played_length(n.sounds()) + ", with the next"));
     else if (played && n.hold > 0)
         list_->SetItem(i, 2, W(played_length(n.beats) + ", sounds " + fmt_g(std::nearbyint(n.hold * 1000) / 1000)));
-    else if (is_gm_voice(voice))
+    else if (is_instrument(voice))
         list_->SetItem(i, 2, W(played_length(n.beats)));
     else
         list_->SetItem(i, 2, W(length_text(n.beats)));
@@ -2841,10 +2892,12 @@ void Studio::take_midi(const std::string &path, bool append) {
     }
     std::vector<std::string> names, played;
     for (const auto &p : parts) names.push_back(p.name);
-    // The parts with words are sung; the rest are played by the GM Soundbank.
+    // The parts with words are sung; the rest are played by the default
+    // soundbank, a SoundFont or the GM Soundbank.
+    int slot = soundbank_slot();
     bool gm = false;
     for (const VoiceListing &v : voices_) gm = gm || (v.id == kGmBase && v.available);
-    if (gm) {
+    if (gm || slot >= 0) {
         played = parts_to_play(parts);
         // Without words, which parts sing is asked all the same: they come in
         // to be sung, their short rests closed, their words added later. Or none.
@@ -2871,9 +2924,13 @@ void Studio::take_midi(const std::string &path, bool append) {
         std::vector<int> programs(128, -1);
         for (const auto &pv : program_map_)
             if (pv.first >= 0 && pv.first < 128) programs[size_t(pv.first)] = pv.second;
+        // the GM Soundbank's own instruments an octave off; a SoundFont's are not
         got = import_midi(path, names, rests_to_close(), played, settings_.remove_note_velocities, lyrics_on,
-                          programs, settings_.close_word_rests, settings_.octave_instruments,
+                          programs, settings_.close_word_rests, settings_.octave_instruments && slot < 0,
                           settings_.remove_volume_changes);
+        if (slot >= 0)
+            for (ImportedPart &p : got.parts)
+                if (p.played) play_on_soundfont(p.voice_id, p.notes, slot);
     } catch (const std::exception &e) {
         cannot_load(path, e.what());
         return;
@@ -2939,8 +2996,8 @@ void Studio::take_midi(const std::string &path, bool append) {
         say(W(std::string("it carried no words, so every note sings ") + kDefaultPhoneme +
               ". Ctrl+W puts a word on one."));
     if (!played.empty())
-        say(W(plural(played.size(), "part") + " played by the GM Soundbank, each with the instrument the file gives "
-              "it; the drums on its drum kit"));
+        say(W(plural(played.size(), "part") + " played by " + soundbank_name(slot) +
+              ", each with the instrument the file gives it; the drums on its drum kit"));
     if (sung > 1) {
         auto it = program_map_.find(program);
         say(W("every part that sings is singing in " + voice_name(it == program_map_.end() ? 0 : it->second) +
@@ -2986,6 +3043,14 @@ void Studio::import_vocalwriter(const std::string &path) {
         cannot_load(path, e.what());
         return;
     }
+    // its instruments on the default soundbank
+    int slot = soundbank_slot();
+    if (slot >= 0)
+        for (Track &t : got.song.tracks) {
+            std::optional<int> was = t.voice_id;
+            play_on_soundfont(t.voice_id, t.notes, slot);
+            if (t.voice_id != was) t.voice_name.reset();
+        }
     Clock clock = got.song.clock();
     take(got.song, "");
     import_name_ = base_name(strip_extension(path));

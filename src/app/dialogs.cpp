@@ -5,6 +5,7 @@
 #include <deque>
 
 #include <wx/dirdlg.h>
+#include <wx/filedlg.h>
 #include <wx/tokenzr.h>
 
 #include "app/studio.h"
@@ -971,7 +972,7 @@ bool control_reaches(const std::string &key, int voice) {
     // the bend range and the rest's pitch are VocalWriter's sequencer's
     if (is_vocalwriter_voice(voice))
         return key != "sustain" && (vocalwriter_own_path() || (key != "bend_range" && key != "lead_pitch"));
-    if (is_gm_voice(voice)) return key == "volume" || key == "sustain" || key == "bend_range" || key == "detune";
+    if (is_instrument(voice)) return key == "volume" || key == "sustain" || key == "bend_range" || key == "detune";
     return false;
 }
 
@@ -990,7 +991,7 @@ NoteDialog::NoteDialog(wxWindow *parent, Studio *studio, const Note *note, const
       studio_(studio),
       note_(note ? *note : seed) {
     int voice = studio_->current_voice();
-    played_ = is_gm_voice(voice);
+    played_ = is_instrument(voice);
     wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
     phon_ = new wxTextCtrl(this, wxID_ANY, W(note_.text()), wxDefaultPosition, wxSize(300, -1));
     labelled(this, outer, "Phonemes", phon_, 1,
@@ -1019,13 +1020,13 @@ NoteDialog::NoteDialog(wxWindow *parent, Studio *studio, const Note *note, const
     velocity_ = new wxTextCtrl(this, wxID_ANY, note_.velocity ? W(std::to_string(note_.velocity)) : wxString(),
                                wxDefaultPosition, wxSize(90, -1));
     labelled(this, outer, "Velocity", velocity_, 0,
-             "1 to 127, blank for the track's; VocalWriter's voices and the GM Soundbank only");
+             "1 to 127, blank for the track's; VocalWriter's voices and the instruments only");
     enable_labelled(velocity_, vocalwriter);
     // how long an instrument holds it, if not its beats
     hold_ = new wxTextCtrl(this, wxID_ANY, note_.hold > 0 ? W(fmt_g(note_.hold)) : wxString(), wxDefaultPosition,
                            wxSize(90, -1));
     labelled(this, outer, "Sounds for", hold_, 0,
-             "beats an instrument holds it, blank for its beats; the GM Soundbank's instruments only");
+             "beats an instrument holds it, blank for its beats; the instruments only");
     enable_labelled(hold_, played_);
     auto ends = bend_ends(note_.bend);
     bend_start_ = new wxTextCtrl(this, wxID_ANY, W(bend_text(ends.first)), wxDefaultPosition, wxSize(90, -1));
@@ -1259,6 +1260,134 @@ std::string PantheraDialog::folder() const {
     return U(t);
 }
 
+SoundbankDialog::SoundbankDialog(wxWindow *parent, const std::vector<SoundFontFile> &fonts,
+                                 const std::string &default_bank)
+    : wxDialog(parent, wxID_ANY, "Soundbank manager"), fonts_(fonts), default_(default_bank) {
+    for (const SoundFontFile &f : fonts_) infos_.push_back(read_soundfont(f.path, f.slot));
+    wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+    list_ = new ReportList(this, wxLC_REPORT | wxLC_SINGLE_SEL, wxSize(520, 180));
+    list_->InsertColumn(0, "SoundFont", wxLIST_FORMAT_LEFT, 150);
+    list_->InsertColumn(1, "Sounds", wxLIST_FORMAT_LEFT, 90);
+    list_->InsertColumn(2, "Voice numbers", wxLIST_FORMAT_LEFT, 100);
+    list_->InsertColumn(3, "File", wxLIST_FORMAT_LEFT, 170);
+    list_->OnSelected([this] { show_remove(); });
+    list_->OnKey([this](wxKeyEvent &e) {
+        if (e.GetKeyCode() == WXK_DELETE && !e.HasAnyModifiers() && list_->FirstSelected() >= 0) {
+            wxCommandEvent c;
+            on_remove(c);
+            return;
+        }
+        e.Skip();
+    });
+    caption(this, outer, "Loaded SoundFonts", list_, 1);
+    // Remove comes before Load, and only while there is something to remove
+    remove_ = new wxButton(this, wxID_ANY, "&Remove");
+    remove_->Bind(wxEVT_BUTTON, &SoundbankDialog::on_remove, this);
+    outer->Add(remove_, 0, wxALL, 6);
+    load_ = new wxButton(this, wxID_ANY, "&Load soundfont...");
+    load_->Bind(wxEVT_BUTTON, &SoundbankDialog::on_load, this);
+    outer->Add(load_, 0, wxALL, 6);
+    bank_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(300, -1));
+    bank_->Bind(wxEVT_CHOICE, [this](wxCommandEvent &) {
+        int i = bank_->GetSelection();
+        default_ = i > 0 && size_t(i) <= fonts_.size() ? fonts_[size_t(i - 1)].path : std::string();
+    });
+    labelled(this, outer, "&Default soundbank", bank_, 0,
+             "plays the parts of an imported MIDI file or VocalWriter song that are not sung");
+    outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
+    fill(fonts_.empty() ? -1 : 0);
+    SetSizerAndFit(outer);
+    if (fonts_.empty()) load_->SetFocus();
+    else list_->SetFocus();
+}
+
+//: The list and the default soundbank's choices, from fonts_, with the row
+//: `select` selected.
+void SoundbankDialog::fill(int select) {
+    list_->DeleteAllItems();
+    for (size_t i = 0; i < infos_.size(); ++i) {
+        const SoundFontInfo &f = infos_[i];
+        list_->InsertItem(long(i), W(f.name));
+        if (f.error.empty()) {
+            std::string sounds = std::to_string(f.presets.size());
+            if (f.total > f.presets.size()) sounds += " of " + std::to_string(f.total);
+            list_->SetItem(long(i), 1, W(sounds));
+            int base = soundfont_base(f.slot);
+            list_->SetItem(long(i), 2, W(std::to_string(base) + " - " + std::to_string(base + int(f.presets.size()) - 1)));
+        } else {
+            list_->SetItem(long(i), 1, "none");
+            list_->SetItem(long(i), 2, W("cannot be read: " + f.error));
+        }
+        list_->SetItem(long(i), 3, W(f.path));
+    }
+    if (select >= 0 && select < list_->GetItemCount()) {
+        list_->SelectRow(select);
+        list_->FocusRow(select);
+    }
+    bank_->Clear();
+    bank_->Append("GM Soundbank (built-in)");
+    int chosen = 0;
+    for (size_t i = 0; i < infos_.size(); ++i) {
+        bank_->Append(W(infos_[i].name));
+        if (fonts_[i].path == default_) chosen = int(i) + 1;
+    }
+    if (chosen == 0) default_.clear();
+    bank_->SetSelection(chosen);
+    show_remove();
+    list_->Refresh();
+}
+
+void SoundbankDialog::show_remove() {
+    bool any = list_->FirstSelected() >= 0;
+    if (remove_->IsShown() == any) return;
+    remove_->Show(any);
+    Layout();
+}
+
+void SoundbankDialog::on_load(wxCommandEvent &) {
+    wxFileDialog pick(this, "Load soundfont", "", "", "SoundFonts (*.sf2)|*.sf2|All files (*.*)|*.*",
+                      wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (pick.ShowModal() != wxID_OK) return;
+    std::string path = U(pick.GetPath());
+    for (size_t i = 0; i < fonts_.size(); ++i)
+        if (fonts_[i].path == path) {
+            wxMessageBox(W(base_name(path) + " is loaded already."), "Load soundfont", wxOK | wxICON_INFORMATION, this);
+            fill(int(i));
+            list_->SetFocus();
+            return;
+        }
+    // the first slot no other SoundFont has, so the numbers of the others stay
+    int slot = 0;
+    for (bool taken = true; taken; ++slot) {
+        taken = false;
+        for (const SoundFontFile &f : fonts_) taken = taken || f.slot == slot;
+        if (!taken) break;
+    }
+    SoundFontInfo info = read_soundfont(path, slot);
+    if (!info.error.empty()) {
+        wxMessageBox(W(base_name(path) + " cannot be loaded: " + info.error + "."), "Load soundfont",
+                     wxOK | wxICON_ERROR, this);
+        return;
+    }
+    fonts_.push_back({path, slot});
+    infos_.push_back(info);
+    fill(int(fonts_.size()) - 1);
+    list_->SetFocus();
+}
+
+void SoundbankDialog::on_remove(wxCommandEvent &) {
+    int i = list_->FirstSelected();
+    if (i < 0 || size_t(i) >= fonts_.size()) return;
+    if (fonts_[size_t(i)].path == default_) default_.clear();
+    fonts_.erase(fonts_.begin() + i);
+    infos_.erase(infos_.begin() + i);
+    fill(std::min(i, int(fonts_.size()) - 1));
+    if (fonts_.empty()) load_->SetFocus();
+    else list_->SetFocus();
+}
+
+std::string SoundbankDialog::default_soundbank() const { return default_; }
+
 ImportPartsDialog::ImportPartsDialog(wxWindow *parent, const wxArrayString &parts)
     : wxDialog(parent, wxID_ANY, "Import MIDI") {
     wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
@@ -1353,7 +1482,7 @@ SungPartsDialog::SungPartsDialog(wxWindow *parent, const wxArrayString &parts)
         W(std::string("This file has no lyrics. Which tracks are sung? Space ticks or unticks a track. Each one "
                       "ticked sings ") +
           kDefaultPhoneme + " on every note until words are put on it; the others, and every track if none is "
-                            "ticked, are played by the GM Soundbank."));
+                            "ticked, are played by the default soundbank."));
     about->Wrap(380);
     outer->Add(about, 0, wxALL, 8);
     list_ = new ReportList(this, wxLC_REPORT | wxLC_SINGLE_SEL, wxSize(380, 220));
@@ -1723,8 +1852,8 @@ TrackDialog::TrackDialog(wxWindow *parent, Studio *studio, const Track &track)
     labelled(this, outer, "Pan", pan_, 0, "-100 far left to 100 far right");
     velocity_ = spin(this, 1, 127, track.velocity, 80);
     labelled(this, outer, "Velocity", velocity_, 0,
-             "how hard the notes are sung or struck, by VocalWriter's voices and the GM Soundbank only; its songs "
-             "used about 114");
+             "how hard the notes are sung or struck, by VocalWriter's voices and the instruments only; "
+             "VocalWriter's songs used about 114");
 
     own_consonants_ = new wxCheckBox(this, wxID_ANY, "&Consonant length just for this track");
     own_consonants_->SetValue(bool(track.consonants));
@@ -1805,7 +1934,7 @@ void TrackDialog::sync_velocity() {
     // or one of VocalWriter's the track changes to further on
     enable_labelled(velocity_, changes_to_vocalwriter_ || (!e.voices.empty() && uses_velocity(e.voices.front().id)));
     // an instrument has no consonants and no voice to set up
-    bool sings = e.voices.empty() || !is_gm_voice(e.voices.front().id);
+    bool sings = e.voices.empty() || !is_instrument(e.voices.front().id);
     own_consonants_->Enable(sings);
     consonants_->Enable(sings && own_consonants_->GetValue());
     own_voice_->Enable(sings);

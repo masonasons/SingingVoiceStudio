@@ -10,6 +10,7 @@
 #include "core/paths.h"
 #include "core/phonology.h"
 #include "voices/family.h"
+#include "voices/soundfont.h"
 
 namespace svs {
 
@@ -97,11 +98,13 @@ std::string vw_spelling(const std::string &symbol) {
     return symbol;
 }
 
-//: The program change that reaches a voice, or -1: a GM instrument's own, or
-//: the first program VocalWriter's bank maps to one of its voices.
+//: The program change that reaches a voice, or -1: a GM instrument's own, a
+//: SoundFont preset's program, or the first program VocalWriter's bank maps
+//: to one of its voices.
 int program_of(int voice, const std::map<int, int> &program_map) {
-    if (voice == kGmDrums) return -1;
+    if (is_drum_kit(voice)) return -1;
     if (is_gm_voice(voice)) return voice - kGmBase;
+    if (auto p = soundfont_preset(voice)) return p->program;
     if (is_vocalwriter_voice(voice))
         for (const auto &pv : program_map)
             if (pv.second == voice) return pv.first;
@@ -214,7 +217,7 @@ std::vector<unsigned char> one_track(const Track &t, int ch, const std::map<int,
         int vel = int(std::max(1L, std::min(127L, ((n.velocity ? n.velocity : t.velocity) * scale) >> 16)));
         unsigned char on[3] = {(unsigned char)(0x90 | ch), (unsigned char)std::max(0, std::min(127, n.pitch)),
                                (unsigned char)vel};
-        if (is_gm_voice(voice)) {
+        if (is_instrument(voice)) {
             // an instrument holds a note as long as it sounds, a chord's too
             long end = n.hold > 0 ? tick_of(at - n.beats + n.hold) : b;
             ev.push_back({a, kOn, {on, on + 3}});
@@ -285,7 +288,7 @@ std::vector<int> default_midi_channels(const std::vector<const Track *> &tracks,
     std::vector<int> out;
     int next = 0;
     for (const Track *t : tracks) {
-        if (first_voice(*t, program_map) == kGmDrums) {
+        if (is_drum_kit(first_voice(*t, program_map))) {
             out.push_back(9);
             continue;
         }

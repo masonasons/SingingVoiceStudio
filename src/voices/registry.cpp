@@ -1,5 +1,7 @@
 #include "voices/registry.h"
 
+#include "voices/soundfont.h"
+
 namespace svs {
 
 Registry &Registry::get() {
@@ -16,8 +18,27 @@ Registry::Registry() {
     families_.push_back(make_gm_family());
 }
 
+void Registry::soundfonts_locked() {
+    int version = soundfonts_version();
+    if (version == soundfonts_seen_) return;
+    soundfonts_seen_ = version;
+    while (families_.size() > kBuiltInFamilies) {
+        retire_soundfont_family(families_.back().get());
+        retired_.push_back(std::move(families_.back()));
+        families_.pop_back();
+    }
+    soundfont_bases_.clear();
+    for (const SoundFontInfo &info : soundfonts()) {
+        families_.push_back(make_soundfont_family(info));
+        soundfont_bases_.push_back(soundfont_base(info.slot));
+    }
+    cache_.clear();
+    listed_ = false;
+}
+
 std::vector<VoiceListing> Registry::voices() {
     std::lock_guard<std::mutex> lock(mu_);
+    soundfonts_locked();
     if (!listed_) {
         for (auto &f : families_) {
             bool ok = f->available(nullptr);
@@ -31,6 +52,13 @@ std::vector<VoiceListing> Registry::voices() {
 
 Family *Registry::family_of(int voice_id) {
     int base = voice_id < 0 ? 0 : (voice_id / kFamilySpan) * kFamilySpan;
+    std::lock_guard<std::mutex> lock(mu_);
+    soundfonts_locked();
+    if (is_soundfont_voice(voice_id)) {
+        for (size_t i = 0; i < soundfont_bases_.size(); ++i)
+            if (soundfont_bases_[i] == base) return families_[kBuiltInFamilies + i].get();
+        return nullptr;
+    }
     for (auto &f : families_) {
         if (base == kVocalWriterBase && f->name() == "VocalWriter") return f.get();
         if (base == kDectalkBase && f->name() == "DECtalk") return f.get();
@@ -69,6 +97,8 @@ double Registry::headroom(int voice_id) {
 
 std::vector<std::string> Registry::status() {
     std::vector<std::string> out;
+    std::lock_guard<std::mutex> lock(mu_);
+    soundfonts_locked();
     for (auto &f : families_) {
         std::string why;
         bool ok = f->available(&why);

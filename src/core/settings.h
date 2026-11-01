@@ -9,10 +9,19 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "core/project.h"
 
 namespace svs {
+
+//: A SoundFont loaded in the Soundbank manager, and the slot its voices are
+//: numbered from: 6000 + 1000 * slot (voices/soundfont.h).
+struct SoundFontFile {
+    std::string path;
+    int slot = 0;
+    bool operator==(const SoundFontFile &o) const { return path == o.path && slot == o.slot; }
+};
 
 struct Settings {
     //: preview a note as it is nudged, so pitch and length can be heard
@@ -44,6 +53,12 @@ struct Settings {
     bool follow_playback = false;
     //: what Export audio wrote last: ".wav", ".flac" or ".ogg"
     std::string export_format = ".wav";
+    //: the SoundFonts loaded in the Soundbank manager
+    std::vector<SoundFontFile> soundfonts;
+    //: what plays the parts of an imported MIDI file or VocalWriter song that
+    //: are not sung: the path of one of `soundfonts`, or empty for the GM
+    //: Soundbank
+    std::string default_soundbank;
 };
 
 Settings load_settings();

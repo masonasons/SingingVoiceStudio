@@ -13,6 +13,8 @@
 //                 hundred numbers to each generation
 //   5000 - 5999   the GM Soundbank: VocalWriter's own General MIDI instruments
 //                 (GMBank), 5000 + the GM program, and 5128 the drum kit
+//   6000 -        the SoundFonts loaded in the Soundbank manager, a thousand
+//                 numbers to each (soundfont.h)
 //
 // The number is not the only thing a song keeps: a voice outside
 // VocalWriter's bank is saved with its name as well (see Track::voice_name),
@@ -34,6 +36,7 @@ enum : int {
     kMicrosoftBase = 3000,
     kMacinTalkBase = 4000,
     kGmBase = 5000,
+    kSoundFontBase = 6000,
     kFamilySpan = 1000,
 };
 
@@ -46,8 +49,17 @@ inline bool is_vocalwriter_voice(int id) { return id >= kVocalWriterBase && id <
 //: Whether a voice is one of the GM Soundbank's instruments, which play the
 //: notes, chords and all, rather than sing them.
 inline bool is_gm_voice(int id) { return id >= kGmBase && id < kGmBase + kFamilySpan; }
-//: Whether a voice hears velocity as more than loudness: VocalWriter's do.
-inline bool uses_velocity(int id) { return is_vocalwriter_voice(id) || is_gm_voice(id); }
+//: Whether a voice is one of a SoundFont's (soundfont.h).
+inline bool is_soundfont_voice(int id) { return id >= kSoundFontBase; }
+//: Whether a voice is an instrument, the GM Soundbank's or a SoundFont's,
+//: which plays the notes, chords and all, rather than sings them.
+inline bool is_instrument(int id) { return is_gm_voice(id) || is_soundfont_voice(id); }
+//: Whether a voice is a drum kit, each key a drum: the GM Soundbank's, or a
+//: SoundFont's preset in its percussion bank (soundfont.h).
+bool is_drum_kit(int id);
+//: Whether a voice hears velocity as more than loudness: VocalWriter's and
+//: the instruments do.
+inline bool uses_velocity(int id) { return is_vocalwriter_voice(id) || is_instrument(id); }
 //: Whether an engine follows VocalWriter's volume control itself; for the
 //: others the mix does.
 inline bool sings_volume(int id) { return is_vocalwriter_voice(id) || is_gm_voice(id); }

@@ -146,7 +146,7 @@ private:
     //: `voice`: the voice in force at the row, if the caller knows it
     void refresh_row(int i, int voice = -1);
     //: whether an instrument plays the current track's row `i`
-    bool played_at(int i) const { return is_gm_voice(voice_at(i)); }
+    bool played_at(int i) const { return is_instrument(voice_at(i)); }
     void refresh_bars();
     void nudge_pitch(int by);
     void nudge_length(bool up);
@@ -203,6 +203,9 @@ private:
                 std::function<void(RenderResult)> done);
     void on_auto_preview(wxCommandEvent &);
     void on_panthera(wxCommandEvent &);
+    void on_soundbanks(wxCommandEvent &);
+    int soundbank_slot();
+    std::string soundbank_name(int slot) const;
     void on_close_rests(wxCommandEvent &);
     double rests_to_close() const;
     void on_remove_velocities(wxCommandEvent &);

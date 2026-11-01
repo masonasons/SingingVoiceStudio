@@ -15,6 +15,7 @@
 #include "core/settings.h"
 #include "core/vwsong.h"
 #include "voices/registry.h"
+#include "voices/soundfont.h"
 #include "voices/vocalwriter.h"
 
 namespace svs {
@@ -116,12 +117,19 @@ Reverb parse_reverb(const std::string &text) {
 }
 
 //: A project, a VocalWriter song or a MIDI file, the MIDI imported exactly as
-//: the window does it.
+//: the window does it. `slot`: the SoundFont that plays the parts not sung,
+//: or -1 for the GM Soundbank (soundbank_slot).
 Song open_song(const std::string &path, double close_rests, bool sing_all, bool remove_velocities,
-               bool remove_volumes, bool plain_held, bool close_word_rests, bool octaves) {
+               bool remove_volumes, bool plain_held, bool close_word_rests, bool octaves, int slot) {
     if (is_vocalwriter_song(path)) {
         VwSongImport got = import_vocalwriter_song(path, vocalwriter_program_voices());
         for (const std::string &n : got.notes) say(n);
+        if (slot >= 0)
+            for (Track &t : got.song.tracks) {
+                std::optional<int> was = t.voice_id;
+                play_on_soundfont(t.voice_id, t.notes, slot);
+                if (t.voice_id != was) t.voice_name.reset();
+            }
         return got.song;
     }
     if (!is_midi_file(path)) return load_project(path);
@@ -129,13 +137,17 @@ Song open_song(const std::string &path, double close_rests, bool sing_all, bool 
     std::vector<MidiPart> parts = midi_parts(path);
     for (const auto &p : parts) names.push_back(p.name);
     if (names.empty()) throw std::runtime_error(base_name(path) + " has no notes in it");
-    // the parts without words played by the GM Soundbank, if it can play
+    // the parts without words played by the default soundbank, if it can play
     std::string why;
     Family *gm = Registry::get().family_of(kGmBase);
-    if (!sing_all && gm && gm->available(&why)) played = parts_to_play(parts);
+    if (!sing_all && (slot >= 0 || (gm && gm->available(&why)))) played = parts_to_play(parts);
     else if (!sing_all) say("every part is sung: the GM Soundbank cannot play here (" + why + ")");
+    // the GM Soundbank's own instruments an octave off; a SoundFont's are not
     Imported got = import_midi(path, names, close_rests, played, remove_velocities, -1, vocalwriter_program_voices(),
-                               close_word_rests, octaves, remove_volumes);
+                               close_word_rests, octaves && slot < 0, remove_volumes);
+    if (slot >= 0)
+        for (ImportedPart &p : got.parts)
+            if (p.played) play_on_soundfont(p.voice_id, p.notes, slot);
     if (got.closed_rests) say(std::to_string(got.closed_rests) + " short rest" + s_if(size_t(got.closed_rests)) + " closed");
     std::vector<std::string> words;
     size_t pending = 0;
@@ -170,8 +182,8 @@ Song open_song(const std::string &path, double close_rests, bool sing_all, bool 
              ? std::string()
              : ", " + tempo_map_said(got.tempo_changes.size(), got.sig_changes.size()) + " on a Tempo track"));
     if (!played.empty())
-        say(std::to_string(played.size()) + " of them, the part" + s_if(played.size()) +
-            " without words, played on the GM Soundbank");
+        say(std::to_string(played.size()) + " of them, the part" + s_if(played.size()) + " without words, played on " +
+            (slot >= 0 ? Registry::get().family_of(soundfont_base(slot))->name() : std::string("the GM Soundbank")));
     return song;
 }
 
@@ -221,8 +233,8 @@ std::string usage() {
            "  --tempo BPM           a steady tempo, 5 to 500, the song's own changes\n"
            "                        left out\n"
            "  --voice NAME          sing every track with this voice, by name or number;\n"
-           "                        a GM Soundbank instrument plays every instrument\n"
-           "                        track instead\n"
+           "                        an instrument plays every instrument track\n"
+           "                        instead\n"
            "  --consonants PERCENT  consonant length, 10 to 100\n"
            "  --reverb ROOM,WET     room size and amount, each 0 to 100, as in 40,24\n"
            "  --anticipate          sing a note's consonants before its beat\n"
@@ -232,8 +244,10 @@ std::string usage() {
            "                        two notes this long or shorter, the note before\n"
            "                        held on\n"
            "  --sing-all            on importing a MIDI file, sing every part; otherwise\n"
-           "                        the parts without words are played on the GM\n"
-           "                        Soundbank, VocalWriter's own instruments\n"
+           "                        the parts without words are played on the\n"
+           "                        default soundbank: the GM Soundbank, VocalWriter's\n"
+           "                        own instruments, or the SoundFont chosen in the\n"
+           "                        window's Soundbank manager\n"
            "  --remove-velocities   on importing a MIDI file, remove the note velocities\n"
            "                        from the sung parts, so they take the track's\n"
            "  --remove-volumes      on importing a MIDI file, remove the volume changes\n"
@@ -324,6 +338,7 @@ int run_cli(const CliArgs &args) {
     Settings settings = load_settings();
     set_macintalk_folder(settings.panthera_folder);
     set_vocalwriter_own_path(settings.vocalwriter_own_path);
+    set_soundfonts(settings.soundfonts);
     if (args.help) {
         out(usage());
         return 0;
@@ -365,10 +380,20 @@ int run_cli(const CliArgs &args) {
     }
     if (args.file.empty()) return 0;
 
+    // the default soundbank, if it can play here
+    int slot = settings.default_soundbank.empty() ? -1 : soundfont_slot(settings.default_soundbank);
+    if (!settings.default_soundbank.empty() && (is_midi_file(args.file) || is_vocalwriter_song(args.file))) {
+        std::string why = "it is not loaded";
+        Family *f = slot >= 0 ? Registry::get().family_of(soundfont_base(slot)) : nullptr;
+        if (!f || !f->available(&why)) {
+            say("the default soundbank cannot play here (" + why + "), so the GM Soundbank plays instead");
+            slot = -1;
+        }
+    }
     Song song;
     try {
         song = open_song(args.file, args.close_rests, args.sing_all, args.remove_velocities, args.remove_volumes,
-                         settings.plain_held_vowels, settings.close_word_rests, settings.octave_instruments);
+                         settings.plain_held_vowels, settings.close_word_rests, settings.octave_instruments, slot);
     } catch (const std::exception &e) {
         return fail("cannot open " + args.file + ": " + e.what());
     }
@@ -424,7 +449,7 @@ int run_cli(const CliArgs &args) {
         // changes only the instrument tracks, a voice only the others.
         int changed = 0;
         for (Track &t : song.tracks) {
-            if (t.is_backing() || is_gm_voice(track_voice(t, programs)) != is_gm_voice(pick)) continue;
+            if (t.is_backing() || is_instrument(track_voice(t, programs)) != is_instrument(pick)) continue;
             ++changed;
             t.voice_id = pick;
             t.voice_name = saved_voice_name(pick, voices);
@@ -436,7 +461,7 @@ int run_cli(const CliArgs &args) {
             }
             t.notes = kept;
         }
-        say(std::string(is_gm_voice(pick) ? "every instrument track is playing " : "every track is singing in ") +
+        say(std::string(is_instrument(pick) ? "every instrument track is playing " : "every track is singing in ") +
             Registry::get().voice_name(pick) + " (" + std::to_string(changed) + " track" + s_if(size_t(changed)) + ")");
     }
     std::vector<const Track *> wanted;
