@@ -120,7 +120,7 @@ Reverb parse_reverb(const std::string &text) {
 //: the window does it. `slot`: the SoundFont that plays the parts not sung,
 //: or -1 for the GM Soundbank (soundbank_slot).
 Song open_song(const std::string &path, double close_rests, bool sing_all, bool remove_velocities,
-               bool remove_volumes, bool plain_held, bool close_word_rests, bool octaves, int slot) {
+               bool remove_volumes, bool plain_held, bool close_word_rests, int slot) {
     if (is_vocalwriter_song(path)) {
         VwSongImport got = import_vocalwriter_song(path, vocalwriter_program_voices());
         for (const std::string &n : got.notes) say(n);
@@ -146,9 +146,8 @@ Song open_song(const std::string &path, double close_rests, bool sing_all, bool 
     Family *gm = Registry::get().family_of(kGmBase);
     if (!sing_all && (slot >= 0 || (gm && gm->available(&why)))) played = parts_to_play(parts);
     else if (!sing_all) say("every part is sung: the GM Soundbank cannot play here (" + why + ")");
-    // the GM Soundbank's own instruments an octave off; a SoundFont's are not
     Imported got = import_midi(path, names, close_rests, played, remove_velocities, -1, vocalwriter_program_voices(),
-                               close_word_rests, octaves && slot < 0, remove_volumes, program_names);
+                               close_word_rests, remove_volumes, program_names);
     if (slot >= 0)
         for (ImportedPart &p : got.parts)
             if (p.played) play_on_soundfont(p.voice_id, p.notes, slot);
@@ -342,6 +341,7 @@ int run_cli(const CliArgs &args) {
     Settings settings = load_settings();
     set_macintalk_folder(settings.panthera_folder);
     set_vocalwriter_own_path(settings.vocalwriter_own_path);
+    set_gm_octaves(settings.octave_instruments);
     set_soundfonts(settings.soundfonts);
     if (args.help) {
         out(usage());
@@ -397,7 +397,7 @@ int run_cli(const CliArgs &args) {
     Song song;
     try {
         song = open_song(args.file, args.close_rests, args.sing_all, args.remove_velocities, args.remove_volumes,
-                         settings.plain_held_vowels, settings.close_word_rests, settings.octave_instruments, slot);
+                         settings.plain_held_vowels, settings.close_word_rests, slot);
     } catch (const std::exception &e) {
         return fail("cannot open " + args.file + ": " + e.what());
     }

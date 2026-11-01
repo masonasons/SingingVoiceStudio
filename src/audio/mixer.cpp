@@ -308,8 +308,10 @@ std::string request_key(const RenderRequest &r) {
     num(r.reverb.first);
     num(r.reverb.second);
     num(r.anticipate);
-    // VocalWriter's voices sound otherwise through its own play path
+    // VocalWriter's voices sound otherwise through its own play path, and so
+    // do the GM Soundbank's instruments with their octaves made good
     num(vocalwriter_own_path());
+    num(gm_octaves());
     for (const PartRequest &t : r.tracks) {
         k += "|T";
         num(t.voice_id);
@@ -545,6 +547,8 @@ std::string phrase_key(int voice_id, const Phrase &p) {
         k += buf;
     };
     num(voice_id);
+    // an instrument of the GM Soundbank's moved an octave or not (gm_octaves)
+    if (is_gm_voice(voice_id)) num(gm_octaves());
     num(p.bpm);
     for (const auto &c : p.tempos) {
         k += "T";

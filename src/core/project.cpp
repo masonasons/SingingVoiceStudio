@@ -1335,22 +1335,10 @@ int program_at_start(const MidiTrack &track) {
 
 bool drum_track(const MidiTrack &track) { return track.channel == 9; }
 
-//: How far to move the notes of GM program `program` (0 to 127), in
-//: semitones, for the soundbank's instrument to sound where the file means
-//: it to: some of them sound an octave low, two an octave high.
-int soundbank_octave(int program) {
-    static const std::set<int> low = {29, 30, 31, 32, 34, 36, 37, 53, 80, 86, 96, 100, 101};
-    if (low.count(program)) return 12;
-    if (program == 98 || program == 102) return -12;
-    return 0;
-}
-
 //: A track as an instrument plays it, as VocalWriter's import took it in:
 //: the notes and chords, the volume (CC 7 by CC 11), the pedal, the bend and
-//: its range, and the program changes. `octaves`: each note is moved by the
-//: octave its program is off by in the soundbank (soundbank_octave).
-ImportedPart from_midi_played(const MidiFile &midi, const MidiTrack &track, const std::string &name,
-                              bool octaves) {
+//: its range, and the program changes.
+ImportedPart from_midi_played(const MidiFile &midi, const MidiTrack &track, const std::string &name) {
     double div = midi.division ? midi.division : 480;
     // as ConvertSMF rescales: times cut to a whole tick, no note under ten
     float scale = float(kPlayedTicks) / float(div);
@@ -1358,25 +1346,12 @@ ImportedPart from_midi_played(const MidiFile &midi, const MidiTrack &track, cons
     auto beat = [&](long tick) { return ticks(tick) / kPlayedTicks; };
     bool drums = drum_track(track);
     int program = std::max(0, program_at_start(track));
-    auto programs = track.programs;
-    std::stable_sort(programs.begin(), programs.end(),
-                     [](const std::pair<long, int> &a, const std::pair<long, int> &b) { return a.first < b.first; });
-    // the program a note at `tick` is played with
-    auto program_of = [&](long tick) {
-        int p = program;
-        for (const auto &c : programs)
-            if (c.first <= tick) p = c.second;
-        return p;
-    };
     std::vector<PlayedNote> notes;
     for (const MidiNote &n : track.notes) {
         PlayedNote p;
         p.start = beat(n.tick);
         p.length = std::max(kShortestPlayed, ticks(n.duration)) / kPlayedTicks;
         p.pitch = n.pitch;
-        // a note the move would take off the keyboard stays where it is
-        int move = octaves && !drums ? soundbank_octave(program_of(n.tick)) : 0;
-        if (p.pitch + move >= 0 && p.pitch + move <= 127) p.pitch += move;
         p.velocity = std::max(1, std::min(127, n.velocity));
         notes.push_back(p);
     }
@@ -1590,8 +1565,8 @@ std::vector<std::pair<std::string, int>> midi_tracks(const std::string &path, co
 
 Imported import_midi(const std::string &path, const std::vector<std::string> &names, double close_rests,
                      const std::vector<std::string> &played, bool remove_velocities, int lyrics_on,
-                     const std::vector<int> &programs, bool close_word_rests, bool octaves,
-                     bool remove_volumes, const ProgramNames &program_names) {
+                     const std::vector<int> &programs, bool close_word_rests, bool remove_volumes,
+                     const ProgramNames &program_names) {
     MidiFile midi = read_midi(path, lyrics_on);
     auto named = named_tracks(midi, program_names);
     if (named.empty()) throw std::runtime_error("this file has no notes in it");
@@ -1615,7 +1590,7 @@ Imported import_midi(const std::string &path, const std::vector<std::string> &na
                 for (Note &n : out.parts.back().notes) n.controls.erase("volume");
             continue;
         }
-        out.parts.push_back(from_midi_played(midi, *track, want, octaves));
+        out.parts.push_back(from_midi_played(midi, *track, want));
     }
     return out;
 }

@@ -176,6 +176,7 @@ Studio::Studio(const std::string &path)
     // before anything asks the engines for their voices
     set_macintalk_folder(settings_.panthera_folder);
     set_vocalwriter_own_path(settings_.vocalwriter_own_path);
+    set_gm_octaves(settings_.octave_instruments);
     set_soundfonts(settings_.soundfonts);
     mixer_ = std::make_shared<Mixer>();
     worker_ = std::make_unique<Worker>(this);
@@ -464,10 +465,10 @@ void Studio::build_menu() {
     mi_plain_held_->Check(settings_.plain_held_vowels);
     mi_octave_instruments_ = prefs->AppendCheckItem(
         ID_OCTAVE_INSTRUMENTS,
-        K("Transpose certain instruments by an &octave when importing MIDI to compensate for their different pitch "
-          "in the soundbank\tCtrl+Shift+O"),
-        "The played parts of programs 29 - 32, 34, 36, 37, 53, 80, 86, 96, 100 and 101 an octave up, of 98 and 102 "
-        "an octave down; the sung parts and VocalWriter songs as they are");
+        K("Compensate for the different &octave of certain instruments when using GM Soundbank during playback and "
+          "export\tCtrl+Shift+O"),
+        "The GM Soundbank plays programs 29 - 32, 34, 36, 37, 53, 80, 86, 96, 100 and 101 an octave up, and 98 and "
+        "102 an octave down; the notes stay as they are, and SoundFonts play them as written");
     mi_octave_instruments_->Check(settings_.octave_instruments);
     mi_follow_ = prefs->AppendCheckItem(ID_FOLLOW, K("&Notes follow playback\tCtrl+Shift+F"),
                                         "While the song plays, every track's cursor moves to the note being sung, "
@@ -719,14 +720,19 @@ void Studio::on_plain_held(wxCommandEvent &) {
         (kept ? "" : ", for this sitting only: the settings file could not be written"));
 }
 
-//: A setting of the program too: whether a MIDI import transposes the
-//: instruments the soundbank has an octave off by an octave.
+//: A setting of the program too: whether the GM Soundbank moves the
+//: instruments it has an octave off by that octave (gm_octaves). Changed on
+//: the engines' thread, between two renders.
 void Studio::on_octave_instruments(wxCommandEvent &) {
     bool on = mi_octave_instruments_->IsChecked();
     settings_.octave_instruments = on;
     bool kept = save_settings(settings_);
-    say(wxString(on ? "importing MIDI transposes the instruments the soundbank has an octave off by an octave"
-                    : "importing MIDI leaves every played part at the pitch the file gives it") +
+    worker_->ask<bool>([on] {
+        set_gm_octaves(on);
+        return on;
+    }, [](bool) {});
+    say(wxString(on ? "the GM Soundbank plays the instruments it has an octave off where their notes are"
+                    : "the GM Soundbank plays every instrument as it sounds in the soundbank") +
         (kept ? "" : ", for this sitting only: the settings file could not be written"));
 }
 
@@ -902,8 +908,8 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+Shift+L  whether importing MIDI removes the volume changes from the sung tracks",
         "Ctrl+Shift+D  whether importing MIDI and adding a word sing a vowel held over several notes on its "
         "first sound until the last of them: day over three notes as d EH, EH, EY",
-        "Ctrl+Shift+O  whether importing MIDI transposes the instruments the soundbank has an octave off by an "
-        "octave",
+        "Ctrl+Shift+O  whether the GM Soundbank makes good the octave its instruments for a few programs are off "
+        "by, in playing and exporting; the notes stay as they are",
         "Ctrl+Shift+F  whether every track's cursor follows the note being sung while the song plays, staying "
         "where it got to when it stops",
         "Ctrl+Shift+V  whether VocalWriter's voices are sung through its own sequencer, sample for sample as "
@@ -2936,10 +2942,8 @@ void Studio::take_midi(const std::string &path, bool append) {
         std::vector<int> programs(128, -1);
         for (const auto &pv : program_map_)
             if (pv.first >= 0 && pv.first < 128) programs[size_t(pv.first)] = pv.second;
-        // the GM Soundbank's own instruments an octave off; a SoundFont's are not
         got = import_midi(path, names, rests_to_close(), played, settings_.remove_note_velocities, lyrics_on,
-                          programs, settings_.close_word_rests, settings_.octave_instruments && slot < 0,
-                          settings_.remove_volume_changes, program_names);
+                          programs, settings_.close_word_rests, settings_.remove_volume_changes, program_names);
         if (slot >= 0)
             for (ImportedPart &p : got.parts)
                 if (p.played) play_on_soundfont(p.voice_id, p.notes, slot);

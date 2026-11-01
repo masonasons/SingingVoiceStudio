@@ -155,9 +155,9 @@ of a MIDI file or a VocalWriter song that are not sung when it is imported: GM
 Soundbank (built-in), or one of the SoundFonts, which then plays each part
 with its preset in bank 0 of the part's program, failing that the same program
 in another bank, and the drums with its kit at program 0 in bank 128, failing
-that any kit; a part it has nothing for stays on the GM Soundbank. Instruments
-an octave off (below) are the GM Soundbank's own, so a SoundFont's parts are
-not moved. The SoundFonts' paths and the default soundbank are kept in the
+that any kit; a part it has nothing for stays on the GM Soundbank. The octave
+a few of the GM Soundbank's instruments are off by (below) is its own: a
+SoundFont plays the notes as they are. The SoundFonts' paths and the default soundbank are kept in the
 settings file, with the other settings, not in the song; the command line uses
 them as the window left them. A SoundFont's samples are read when one of its
 voices first plays.
@@ -272,14 +272,17 @@ rather than f YU, YU, YU. The command line does as the window was last set
 to.
 
 **Instruments an octave off**: a few of the GM Soundbank's instruments sound
-an octave away from where a MIDI file means them to. Settings > Transpose
-certain instruments by an octave when importing MIDI to compensate for their
-different pitch in the soundbank (Ctrl+Shift+O, off until it is turned on)
-moves the played parts of programs 29 - 32, 34, 36, 37, 53, 80, 86, 96, 100
-and 101 an octave up, and of 98 and 102 an octave down, counting from 0,
-note by note by the program each is played with. A sung part, the drum kit
-and a VocalWriter song are left as they are. The command line does as the
-window was last set to.
+an octave away from where their notes are. Settings > Compensate for the
+different octave of certain instruments when using GM Soundbank during
+playback and export (Ctrl+Shift+O, off until it is turned on) has the GM
+Soundbank play programs 29 - 32, 34, 36, 37, 53, 80, 86, 96, 100 and 101 an
+octave up, and 98 and 102 an octave down, counting from 0, note by note by
+the instrument each is played with, in playing and in exporting alike. The
+notes themselves stay where they are, so a MIDI file exported, or a part put
+on a SoundFont, has them as written; the drum kit is left as it is. It is for
+every track the GM Soundbank plays, a VocalWriter song's as well, which
+VocalWriter played without it. The command line does as the window was last
+set to.
 
 **Velocities** come in on every note of a MIDI file, sung or played, as
 VocalWriter took them in: the one most of a track's notes have is the
@@ -550,7 +553,7 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+Shift+E | whether importing MIDI removes the note velocities from the sung tracks |
 | Ctrl+Shift+L | whether importing MIDI removes the volume changes from the sung tracks |
 | Ctrl+Shift+D | whether importing MIDI and adding a word sing a vowel held over several notes on its first sound |
-| Ctrl+Shift+O | whether importing MIDI transposes the instruments the soundbank has an octave off by an octave |
+| Ctrl+Shift+O | whether the GM Soundbank makes good the octave a few of its instruments are off by |
 | Ctrl+Shift+V | whether VocalWriter's voices are sung through its own sequencer |
 | Ctrl+Shift+K | the Soundbank manager: SoundFonts and the default soundbank |
 | Ctrl+Shift+S / Ctrl+Shift+T | export one WAV, FLAC or Ogg Vorbis file / one WAV per track |
