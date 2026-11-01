@@ -48,6 +48,7 @@ enum {
     ID_REMOVE_VELOCITIES, ID_APPEND, ID_OWN_PATH, ID_PLAIN_HELD, ID_FOLLOW, ID_FOLLOW_TIMER, ID_EXPORT_TIMER,
     ID_EXPORT_MIDI, ID_ADD_WORD_EXISTING, ID_OCTAVE_INSTRUMENTS, ID_ADD_TEXT, ID_REMOVE_VOLUMES,
     ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN, ID_SOUNDBANKS,
+    ID_NOTE_TO_REST,
 };
 
 //: A beat is a quarter note, so a sixteenth is a quarter of a beat: the step
@@ -342,6 +343,8 @@ void Studio::build_menu() {
     note->Append(ID_ADD_CONTROLLER, K("Add &controller...\tCtrl+Shift+C"),
                  "A change from here on, taking no time: a tempo or time signature change applies to the entire song");
     note->Append(ID_EDIT, K("&Edit note...\tCtrl+E"), "Edit the selected note");
+    note->Append(ID_NOTE_TO_REST, K("Convert note to rest\tCtrl+L"),
+                 "Make the note the cursor is on a rest, as long and at the same pitch");
     note->AppendSeparator();
     // No tab, so no global accelerator: Ctrl+C belongs to whatever text field
     // has the focus. The notes list handles these keys itself.
@@ -492,6 +495,7 @@ void Studio::build_menu() {
     on(ID_ADD_TEXT, &Studio::on_add_text);
     on(ID_ADD_NOTE, &Studio::on_add_note);
     on(ID_ADD_REST, &Studio::on_add_rest);
+    on(ID_NOTE_TO_REST, &Studio::on_note_to_rest);
     on(ID_BAR_REST, &Studio::on_bar_rest);
     on(ID_ADD_CONTROLLER, &Studio::on_add_controller);
     on(ID_GOTO_BAR, &Studio::on_goto_bar);
@@ -871,6 +875,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "which applies to the entire song whichever track it is on",
         "Ctrl+G  go to a bar",
         "Ctrl+E  edit note",
+        "Ctrl+L  make the note the cursor is on a rest, as long and at the same pitch",
         "Ctrl+D or Delete  remove note",
         "Ctrl+C, Ctrl+X, Ctrl+V  copy, cut and paste notes",
         "Ctrl+A  select every note",
@@ -1982,6 +1987,41 @@ void Studio::on_add_rest(wxCommandEvent &) {
         touch();
         sync(at);
         say(W("added a rest of " + beat_count(rest.beats) + ". Alt+Right and Alt+Left change it."));
+    });
+}
+
+//: The note the cursor is on, and no other, made a rest as long and at the
+//: same pitch. Its word, bend and wheel go; the controls it carries stay, as
+//: they hold for the notes after it.
+void Studio::on_note_to_rest(wxCommandEvent &) {
+    if (!takes_notes()) return;
+    undoable("convert note to rest", [&] {
+        int i = list_->FocusedRow();
+        if (i < 0 || i >= int(notes().size())) i = selection();
+        if (i < 0) {
+            say("select a note first");
+            return;
+        }
+        Note &n = notes()[size_t(i)];
+        if (n.controller) {
+            say("a controller is not a note, so it cannot be a rest");
+            return;
+        }
+        if (n.is_rest()) {
+            say("it is a rest already");
+            return;
+        }
+        // a chord's note but the last sounds with the next, taking no time
+        if (n.beats <= 0) {
+            say("a chord's note takes no time of its own, so it cannot be a rest");
+            return;
+        }
+        Note rest({kRest}, n.pitch, n.beats);
+        rest.controls = n.controls;
+        n = rest;
+        touch();
+        sync(i);
+        say(W("now a rest of " + beat_count(rest.beats)));
     });
 }
 

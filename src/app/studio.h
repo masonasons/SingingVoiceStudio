@@ -167,6 +167,7 @@ private:
     void on_add_text(wxCommandEvent &);
     void on_add_note(wxCommandEvent &);
     void on_add_rest(wxCommandEvent &);
+    void on_note_to_rest(wxCommandEvent &);
     void on_add_controller(wxCommandEvent &);
     std::string controller_said(int i);
     std::vector<int> selected_notes();
