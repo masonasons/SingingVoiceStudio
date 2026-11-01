@@ -115,6 +115,7 @@ std::string Note::label() const {
     if (controller) {
         std::string said;
         if (tempo > 0) said = "tempo change to " + fmt_g(tempo);
+        if (sig) said += std::string(said.empty() ? "" : ", ") + "time signature change to " + format_sig(*sig);
         if (voice_id) said += std::string(said.empty() ? "" : ", ") + "voice change";
         if (pan) said += std::string(said.empty() ? "" : ", ") + "pan " + std::to_string(*pan);
         for (const auto &c : controls) {
@@ -399,6 +400,7 @@ Reverb read_reverb(const json &doc) {
 json controller_doc(const Note &n) {
     json c = json::object();
     if (n.tempo > 0) c["tempo"] = round_to(n.tempo, 3);
+    if (n.sig) c["time_signature"] = {n.sig->first, n.sig->second};
     if (n.voice_id) c["voice_id"] = *n.voice_id;
     if (n.voice_name) c["voice_name"] = *n.voice_name;
     if (n.pan) c["pan"] = *n.pan;
@@ -519,6 +521,12 @@ void read_controller(const json &c, Note &n) {
     n = Note::tempo_change(0);
     if (!c.is_object()) return;
     if (c.contains("tempo")) n.tempo = std::max(0.0, as_double(c["tempo"], 0));
+    if (c.contains("time_signature") && c["time_signature"].is_array() && c["time_signature"].size() >= 2) {
+        // one that is no time signature is left out
+        Sig s = parse_sig(std::to_string(as_int(c["time_signature"][0], 0)) + "/" +
+                          std::to_string(as_int(c["time_signature"][1], 0)), {0, 0});
+        if (s.first) n.sig = s;
+    }
     if (c.contains("voice_id") && !c["voice_id"].is_null()) n.voice_id = as_int(c["voice_id"], 0);
     if (c.contains("voice_name") && c["voice_name"].is_string()) n.voice_name = c["voice_name"].get<std::string>();
     if (c.contains("pan") && c["pan"].is_number()) n.pan = std::max(-100, std::min(100, as_int(c["pan"], 0)));
@@ -850,6 +858,25 @@ Sig midi_sig(const MidiFile &midi) {
         return {first.num, first.den};
     }
     return kDefaultSig;
+}
+
+//: The time signature's changes after the one it starts with, at the beats
+//: they fall on.
+std::vector<SigChange> midi_sig_changes(const MidiFile &midi) {
+    double div = midi.division ? midi.division : 480;
+    std::vector<MidiTrack::TimeSig> all;
+    for (const MidiTrack &t : midi.tracks) all.insert(all.end(), t.time_sigs.begin(), t.time_sigs.end());
+    std::stable_sort(all.begin(), all.end(),
+                     [](const MidiTrack::TimeSig &a, const MidiTrack::TimeSig &b) { return a.tick < b.tick; });
+    std::vector<SigChange> out;
+    Sig now = midi_sig(midi);
+    for (const MidiTrack::TimeSig &s : all) {
+        Sig sig{s.num, s.den};
+        if (s.tick <= 0 || sig == now) continue;
+        out.push_back({s.tick / div, sig});
+        now = sig;
+    }
+    return clean_sig_changes(out);
 }
 
 //: The tempo changes after the first, at the beats they fall on.
@@ -1560,6 +1587,7 @@ Imported import_midi(const std::string &path, const std::vector<std::string> &na
     out.bpm = midi_tempo(midi);
     out.tempo_changes = midi_tempo_changes(midi);
     out.sig = midi_sig(midi);
+    out.sig_changes = midi_sig_changes(midi);
     for (const std::string &want : names) {
         const MidiTrack *track = nullptr;
         for (const auto &nt : named)
@@ -2143,16 +2171,109 @@ Clock Song::clock() const {
     return c;
 }
 
-Track tempo_track(const std::vector<TempoChange> &changes) {
+//: the bars from `from` to a change at `to` in `sig`, one it cuts short counted
+static int bars_between(double from, double to, Sig sig) {
+    return std::max(0, int(std::ceil((to - from) / bar_beats(sig) - 1e-6)));
+}
+
+std::pair<int, double> Meter::bar_and_beat(double position) const {
+    int bars = 0;
+    double from = 0;
+    Sig now = sig;
+    for (const SigChange &c : changes) {
+        if (c.beat > position + 1e-9) break;
+        bars += bars_between(from, c.beat, now);
+        from = c.beat;
+        now = c.sig;
+    }
+    auto bb = svs::bar_and_beat(from > 0 ? std::max(0.0, position - from) : position, now);
+    return {bars + bb.first, bb.second};
+}
+
+double Meter::position(int bar, double beat) const {
+    int first = 1;      // the bar the stretch from `from` begins with
+    double from = 0;
+    Sig now = sig;
+    for (const SigChange &c : changes) {
+        int bars = bars_between(from, c.beat, now);
+        if (bar < first + bars) break;
+        first += bars;
+        from = c.beat;
+        now = c.sig;
+    }
+    return from + (bar - first) * bar_beats(now) + (beat - 1) * 4.0 / std::max(now.second, 1);
+}
+
+Sig Meter::sig_at(double position) const {
+    Sig now = sig;
+    for (const SigChange &c : changes)
+        if (c.beat <= position + 1e-9) now = c.sig;
+    return now;
+}
+
+std::vector<SigChange> clean_sig_changes(std::vector<SigChange> changes) {
+    std::stable_sort(changes.begin(), changes.end(),
+                     [](const SigChange &a, const SigChange &b) { return a.beat < b.beat; });
+    std::vector<SigChange> out;
+    for (SigChange c : changes) {
+        if (!(c.beat > 1e-9) || !std::isfinite(c.beat)) continue;
+        if (parse_sig(format_sig(c.sig), {0, 0}) != c.sig) continue;
+        c.beat = std::nearbyint(c.beat * 1e6) / 1e6;
+        if (!out.empty() && out.back().beat == c.beat) out.back() = c;
+        else out.push_back(c);
+    }
+    return out;
+}
+
+Meter Song::meter() const {
+    // as clock(): the lowest track first, so the one higher up is kept
+    std::vector<SigChange> all;
+    for (auto t = tracks.rbegin(); t != tracks.rend(); ++t) {
+        double at = 0;
+        for (const Note &n : t->notes) {
+            if (n.controller && n.sig) all.push_back({at, *n.sig});
+            at += n.beats;
+        }
+    }
+    std::stable_sort(all.begin(), all.end(),
+                     [](const SigChange &a, const SigChange &b) { return a.beat < b.beat; });
+    Meter m{sig, {}};
+    for (const SigChange &s : all)
+        if (s.beat <= 1e-9 && parse_sig(format_sig(s.sig), {0, 0}) == s.sig) m.sig = s.sig;
+    m.changes = clean_sig_changes(all);
+    return m;
+}
+
+Track tempo_track(const std::vector<TempoChange> &changes, const std::vector<SigChange> &sigs) {
+    // both kinds in order, one controller where they fall together
+    std::map<double, Note> at_beat;
+    for (const TempoChange &c : changes) {
+        auto it = at_beat.emplace(c.beat, Note::tempo_change(0)).first;
+        it->second.tempo = c.bpm;
+    }
+    for (const SigChange &c : sigs) {
+        auto it = at_beat.emplace(c.beat, Note::tempo_change(0)).first;
+        it->second.sig = c.sig;
+    }
     Track t;
     t.name = "Tempo";
     double at = 0;
-    for (const TempoChange &c : changes) {
-        if (c.beat > at) t.notes.push_back(Note({kRest}, kDefaultPitch, c.beat - at));
-        t.notes.push_back(Note::tempo_change(c.bpm));
-        at = std::max(at, c.beat);
+    for (const auto &c : at_beat) {
+        if (c.first > at) t.notes.push_back(Note({kRest}, kDefaultPitch, c.first - at));
+        t.notes.push_back(c.second);
+        at = std::max(at, c.first);
     }
     return t;
+}
+
+std::string tempo_map_said(size_t tempos, size_t sigs) {
+    auto count = [](size_t n, const char *what) {
+        return std::to_string(n) + " " + what + " change" + (n == 1 ? "" : "s");
+    };
+    std::string said;
+    if (tempos) said = count(tempos, "tempo");
+    if (sigs) said += (said.empty() ? "" : " and ") + count(sigs, "time signature");
+    return said;
 }
 
 std::vector<std::pair<double, int>> voice_changes(const Track &track) {
@@ -2177,7 +2298,7 @@ void steady_tempo(Song &song) {
         for (Note n : t.notes) {
             // a controller that changes something else too keeps doing that
             if (n.controller) n.tempo = 0;
-            if (!n.controller || n.voice_id || n.pan || !n.controls.empty()) kept.push_back(n);
+            if (!n.controller || n.voice_id || n.pan || n.sig || !n.controls.empty()) kept.push_back(n);
         }
         t.notes = kept;
     }
@@ -2186,7 +2307,10 @@ void steady_tempo(Song &song) {
 void drop_tempo_map(Song &song) {
     std::vector<bool> tempo(song.tracks.size());
     for (size_t k = 0; k < song.tracks.size(); ++k)
-        for (const Note &n : song.tracks[k].notes) tempo[k] = tempo[k] || (n.controller && n.tempo > 0);
+        for (const Note &n : song.tracks[k].notes)
+            tempo[k] = tempo[k] || (n.controller && (n.tempo > 0 || n.sig));
+    for (Track &t : song.tracks)
+        for (Note &n : t.notes) n.sig.reset();
     steady_tempo(song);
     std::vector<Track> kept;
     for (size_t k = 0; k < song.tracks.size(); ++k) {

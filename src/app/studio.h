@@ -135,7 +135,7 @@ private:
     std::vector<int> selected() const;
     void select_only(const std::vector<int> &rows);
     double position(int index);
-    int bar_of(int index);
+    Sig sig_at(int index);
     void on_goto_bar(wxCommandEvent &);
     void on_bar_rest(wxCommandEvent &);
     std::vector<std::string> bars();

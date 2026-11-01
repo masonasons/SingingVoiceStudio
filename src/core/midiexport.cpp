@@ -297,11 +297,16 @@ std::vector<int> default_midi_channels(const std::vector<const Track *> &tracks,
 
 void export_midi(const std::string &path, const Song &song, const std::vector<MidiOut> &tracks,
                  const std::map<int, int> &program_map) {
-    // the first track: the time signature, then the tempo and its changes
+    // the first track: the time signature and its changes, then the tempo and its
     std::vector<Ev> conductor;
-    int den = 0;
-    while ((1 << den) < song.sig.second && den < 7) ++den;
-    conductor.push_back({0, kControl, {0xFF, 0x58, 0x04, (unsigned char)song.sig.first, (unsigned char)den, 0x20, 0x08}});
+    auto time_sig = [&](long tick, Sig sig) {
+        int den = 0;
+        while ((1 << den) < sig.second && den < 7) ++den;
+        conductor.push_back({tick, kControl, {0xFF, 0x58, 0x04, (unsigned char)sig.first, (unsigned char)den, 0x20, 0x08}});
+    };
+    Meter meter = song.meter();
+    time_sig(0, meter.sig);
+    for (const SigChange &c : meter.changes) time_sig(tick_of(c.beat), c.sig);
     Clock clock = song.clock();
     auto tempo = [&](long tick, double bpm) {
         // rounded down, as VocalWriter divided

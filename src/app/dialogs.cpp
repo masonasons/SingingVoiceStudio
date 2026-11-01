@@ -62,6 +62,19 @@ bool check_range(wxDialog *d, wxTextCtrl *field, const wxString &name, double lo
     return false;
 }
 
+//: Whether `field` holds a time signature, or is blank; if not, as check_range.
+bool check_sig(wxDialog *d, wxTextCtrl *field) {
+    wxString t = field->GetValue();
+    t.Trim(true).Trim(false);
+    if (t.empty() || parse_sig(U(t), {0, 0}).first) return true;
+    wxMessageBox("A time signature is the beats to the bar over the note that has the beat, as 3/4 or 6/8: from 1 "
+                 "to 32 over 1, 2, 4, 8, 16 or 32.",
+                 d->GetTitle(), wxOK | wxICON_ERROR, d);
+    field->SetFocus();
+    field->SelectAll();
+    return false;
+}
+
 }  // namespace
 
 // -- PhonemePicker --------------------------------------------------------------
@@ -1149,14 +1162,14 @@ wxSpinCtrl *spin(wxWindow *parent, int lo, int hi, int value, int width) {
 }
 
 //: the song's end as bar and beat, "12 1"; empty when it has none
-std::string end_text(double end, Sig sig) {
+std::string end_text(double end, const Meter &meter) {
     if (end <= 0) return "";
-    auto bb = bar_and_beat(end, sig);
+    auto bb = meter.bar_and_beat(end);
     return std::to_string(bb.first) + " " + fmt_g(std::nearbyint(bb.second * 1000) / 1000);
 }
 
 //: "12 1", "12:1" or "12" back to beats from the start; 0 for empty
-double parse_end(const wxString &text, Sig sig) {
+double parse_end(const wxString &text, const Meter &meter) {
     wxString t = text;
     t.Replace(":", " ");
     t.Trim(true).Trim(false);
@@ -1167,7 +1180,7 @@ double parse_end(const wxString &text, Sig sig) {
     rest.Trim(false);
     if (!rest.empty() && !read_number(rest, &beat)) beat = 1;
     beat = std::max(1.0, beat);
-    return (std::floor(bar) - 1) * bar_beats(sig) + (beat - 1) * 4.0 / std::max(sig.second, 1);
+    return meter.position(int(std::floor(bar)), beat);
 }
 }  // namespace
 
@@ -1328,12 +1341,12 @@ LyricTrackDialog::LyricTrackDialog(wxWindow *parent, const wxArrayString &parts,
 
 SongSettingsDialog::SongSettingsDialog(wxWindow *parent, const Song &song, bool own_time)
     : wxDialog(parent, wxID_ANY, "Song settings"), was_sig_(song.sig), was_end_(song.end),
-      end_shown_(W(end_text(song.end, song.sig))) {
+      end_shown_(W(end_text(song.end, song.meter()))) {
     wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
     tempo_ = spin(this, int(kMinBpm), int(kMaxBpm), int(song.bpm), 80);
     labelled(this, outer, "Tempo", tempo_, 0, "beats per minute at the start; a controller changes it");
     sig_ = new wxTextCtrl(this, wxID_ANY, W(format_sig(song.sig)), wxDefaultPosition, wxSize(60, -1));
-    labelled(this, outer, "Time signature", sig_, 0, "as 4/4; it sets where the bars fall");
+    labelled(this, outer, "Time signature", sig_, 0, "as 4/4, where the bars fall from the start; a controller changes it");
     end_ = new wxTextCtrl(this, wxID_ANY, end_shown_, wxDefaultPosition, wxSize(80, -1));
     labelled(this, outer, "Song end", end_, 0,
              "bar and beat, as 12 1, where an export stops; empty is a beat after the last note");
@@ -1379,7 +1392,7 @@ void SongSettingsDialog::apply(Song &song) const {
     song.sig = parse_sig(U(sig_->GetValue()), was_sig_);
     // left as shown, it keeps the end it had, which may lie between the
     // thousandths of a beat it is shown in
-    song.end = end_->GetValue() == end_shown_ ? was_end_ : parse_end(end_->GetValue(), song.sig);
+    song.end = end_->GetValue() == end_shown_ ? was_end_ : parse_end(end_->GetValue(), song.meter());
     song.consonants = consonants_->GetValue() / 100.0;
     for (const auto &vc : voice_ctrls_) song.voice.*(vc.first->field) = vc.second->GetValue();
     song.voice = clean_voice(song.voice);
@@ -1397,6 +1410,7 @@ ControllerDialog::ControllerDialog(wxWindow *parent, Studio *studio, const Note 
     wxArrayString kinds;
     kinds.Add("Voice change");
     kinds.Add("Tempo change");
+    kinds.Add("Time signature change");
     kinds.Add("Pan change");
     kind_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(220, -1), kinds);
     labelled(this, outer_, "Controller", kind_, 0, "what it changes from here on");
@@ -1431,6 +1445,14 @@ ControllerDialog::ControllerDialog(wxWindow *parent, Studio *studio, const Note 
     outer_->Add(tempo_group, 0, wxEXPAND);
     groups_.push_back(tempo_group);
 
+    wxBoxSizer *sig_group = new wxBoxSizer(wxVERTICAL);
+    sig_ = new wxTextCtrl(this, wxID_ANY, controller.sig ? W(format_sig(*controller.sig)) : wxString(),
+                          wxDefaultPosition, wxSize(80, -1));
+    labelled(this, sig_group, "Time signature change (applies to the entire song)", sig_, 0,
+             "as 3/4 or 6/8, from here on; a new bar begins here");
+    outer_->Add(sig_group, 0, wxEXPAND);
+    groups_.push_back(sig_group);
+
     wxBoxSizer *pan_group = new wxBoxSizer(wxVERTICAL);
     pan_ = new wxTextCtrl(this, wxID_ANY, controller.pan ? W(std::to_string(*controller.pan)) : wxString(),
                           wxDefaultPosition, wxSize(80, -1));
@@ -1464,10 +1486,11 @@ ControllerDialog::ControllerDialog(wxWindow *parent, Studio *studio, const Note 
         kind_->Append(k.label);
     }
     // an existing controller shows what it changes
-    int kind = controller.voice_id ? 0 : controller.tempo > 0 ? 1 : controller.pan ? 2 : 0;
-    for (size_t i = 0; i < controls_.size() && !controller.voice_id && controller.tempo <= 0 && !controller.pan; ++i)
+    int kind = controller.voice_id ? 0 : controller.tempo > 0 ? 1 : controller.sig ? 2 : controller.pan ? 3 : 0;
+    bool other = controller.voice_id || controller.tempo > 0 || controller.sig || controller.pan;
+    for (size_t i = 0; i < controls_.size() && !other; ++i)
         if (controller.controls.count(controls_[i].first->key)) {
-            kind = 3 + int(i);
+            kind = 4 + int(i);
             break;
         }
     kind_->SetSelection(kind);
@@ -1484,9 +1507,10 @@ void ControllerDialog::on_ok(wxCommandEvent &evt) {
     int k = kind_->GetSelection();
     bool fine = true;
     if (k == 1) fine = check_range(this, tempo_, "Tempo", kMinBpm, kMaxBpm, true);
-    else if (k == 2) fine = check_range(this, pan_, "Pan", -100, 100, true);
-    else if (k >= 3 && size_t(k - 3) < controls_.size()) {
-        const auto &c = controls_[size_t(k - 3)];
+    else if (k == 2) fine = check_sig(this, sig_);
+    else if (k == 3) fine = check_range(this, pan_, "Pan", -100, 100, true);
+    else if (k >= 4 && size_t(k - 4) < controls_.size()) {
+        const auto &c = controls_[size_t(k - 4)];
         fine = check_range(this, c.second, c.first->label, c.first->lo, c.first->hi, true);
     }
     if (fine) evt.Skip();
@@ -1523,6 +1547,7 @@ Note ControllerDialog::result() const {
     // one change to a controller: the kind chosen, and nothing else
     Note n = note_;
     n.tempo = 0;
+    n.sig.reset();
     n.voice_id.reset();
     n.voice_name.reset();
     n.pan.reset();
@@ -1539,10 +1564,13 @@ Note ControllerDialog::result() const {
         if (read_number(tempo_->GetValue(), &bpm) && bpm > 0)
             n.tempo = std::max(kMinBpm, std::min(kMaxBpm, std::nearbyint(bpm * 1e3) / 1e3));
     } else if (k == 2) {
+        Sig sig = parse_sig(U(sig_->GetValue()), {0, 0});
+        if (sig.first) n.sig = sig;
+    } else if (k == 3) {
         double pan = 0;
         if (read_number(pan_->GetValue(), &pan)) n.pan = std::max(-100, std::min(100, int(std::lrint(pan))));
-    } else if (k >= 3 && size_t(k - 3) < controls_.size()) {
-        const auto &c = controls_[size_t(k - 3)];
+    } else if (k >= 4 && size_t(k - 4) < controls_.size()) {
+        const auto &c = controls_[size_t(k - 4)];
         double v = 0;
         if (read_number(c.second->GetValue(), &v))
             n.controls[c.first->key] = {{0.0, std::max(double(c.first->lo), std::min(double(c.first->hi), std::nearbyint(v)))}};

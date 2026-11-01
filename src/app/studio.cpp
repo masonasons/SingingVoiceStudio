@@ -326,7 +326,7 @@ void Studio::build_menu() {
     note->Append(ID_BAR_REST, K("Rest to the end of the &bar\tCtrl+Shift+R"),
                  "Add a rest long enough to reach the next bar line");
     note->Append(ID_ADD_CONTROLLER, K("Add &controller...\tCtrl+Shift+C"),
-                 "A change from here on, taking no time: a tempo change applies to the entire song");
+                 "A change from here on, taking no time: a tempo or time signature change applies to the entire song");
     note->Append(ID_EDIT, K("&Edit note...\tCtrl+E"), "Edit the selected note");
     note->AppendSeparator();
     // No tab, so no global accelerator: Ctrl+C belongs to whatever text field
@@ -576,7 +576,7 @@ void Studio::on_song_settings(wxCommandEvent &) {
         if (song_.anticipate != was.anticipate)
             say(wxString("consonants ") + (song_.anticipate ? "before" : "after") + " the beat");
         if (song_.end != was.end) {
-            auto bb = bar_and_beat(song_.end, song_.sig);
+            auto bb = song_.meter().bar_and_beat(song_.end);
             say(song_.end > 0 ? W("the song ends at bar " + std::to_string(bb.first) + " beat " +
                                   fmt_g(std::nearbyint(bb.second * 1000) / 1000))
                               : wxString("the song ends a beat after its last note"));
@@ -785,8 +785,8 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+N  add a note after the selected note, or at the end",
         "Ctrl+R  add a rest, a silent break",
         "Ctrl+Shift+R  rest to the end of the bar",
-        "Ctrl+Shift+C  add a controller: a change from there on, such as a tempo change, which "
-        "applies to the entire song whichever track it is on",
+        "Ctrl+Shift+C  add a controller: a change from there on, such as a tempo or time signature change, "
+        "which applies to the entire song whichever track it is on",
         "Ctrl+G  go to a bar",
         "Ctrl+E  edit note",
         "Ctrl+D or Delete  remove note",
@@ -1095,8 +1095,13 @@ std::string Studio::track_sound(const Track &t) const {
     if (t.is_backing()) return "backing track, " + base_name(t.audio);
     // a track that sings nothing, as the tempo is kept on, has no voice to speak of
     if (!sings(t)) {
-        for (const Note &n : t.notes)
-            if (n.controller && n.tempo > 0) return "tempo changes";
+        bool tempo = false, sig = false;
+        for (const Note &n : t.notes) {
+            tempo = tempo || (n.controller && n.tempo > 0);
+            sig = sig || (n.controller && n.sig);
+        }
+        if (tempo && sig) return "tempo and time signature changes";
+        if (tempo || sig) return tempo ? "tempo changes" : "time signature changes";
     }
     bool changes = !voice_changes(t).empty();
     return voice_name(track_voice_of(t)) + (changes ? ", with voice changes" : "");
@@ -1118,6 +1123,7 @@ std::string Studio::label_of(const Note &n) const {
     auto add = [&](const std::string &s) { said += (said.empty() ? "" : ", ") + s; };
     if (n.voice_id) add("voice change to " + voice_name(*n.voice_id));
     if (n.tempo > 0) add("tempo change to " + fmt_g(n.tempo));
+    if (n.sig) add("time signature change to " + format_sig(*n.sig));
     if (n.pan) add("pan " + std::to_string(*n.pan));
     if (!n.controls.empty()) add(describe_controls(n));
     return "(" + (said.empty() ? std::string("controller") : said) + ")";
@@ -1252,7 +1258,8 @@ double Studio::position(int index) {
     return at;
 }
 
-int Studio::bar_of(int index) { return bar_and_beat(position(index), signature()).first; }
+//: The time signature in force where row `index` starts.
+Sig Studio::sig_at(int index) { return song_.meter().sig_at(position(index)); }
 
 //: Jump to a bar, which is how a long song is got about.
 void Studio::on_goto_bar(wxCommandEvent &) {
@@ -1260,7 +1267,15 @@ void Studio::on_goto_bar(wxCommandEvent &) {
         say("there are no notes yet");
         return;
     }
-    int last_bar = bar_of(int(notes().size()) - 1);
+    // each row's bar, worked out once
+    Meter meter = song_.meter();
+    std::vector<int> bar_at;
+    double at = 0;
+    for (const Note &n : notes()) {
+        bar_at.push_back(meter.bar_and_beat(at).first);
+        at += n.beats;
+    }
+    int last_bar = bar_at.back();
     wxTextEntryDialog dlg(this, W("Bar number, 1 to " + std::to_string(last_bar)), "Go to bar", "1");
     // the 1 selected, so a bar typed replaces it
     for (wxWindow *w : dlg.GetChildren())
@@ -1276,10 +1291,10 @@ void Studio::on_goto_bar(wxCommandEvent &) {
         return;
     }
     for (int i = 0; i < int(notes().size()); ++i) {
-        if (bar_of(i) >= want) {
+        if (bar_at[size_t(i)] >= want) {
             select_only({i});
             list_->SetFocus();
-            say(W("bar " + std::to_string(bar_of(i)) + ", note " + std::to_string(i + 1) + " of " +
+            say(W("bar " + std::to_string(bar_at[size_t(i)]) + ", note " + std::to_string(i + 1) + " of " +
                   std::to_string(notes().size()) + ", " + notes()[size_t(i)].label()));
             return;
         }
@@ -1294,27 +1309,29 @@ void Studio::on_bar_rest(wxCommandEvent &) {
     undoable("add bar rest", [&] {
         std::vector<int> rows = selected();
         int at = rows.empty() ? int(notes().size()) : rows.back() + 1;
-        double span = bar_beats(signature());
+        Meter meter = song_.meter();
         double pos = position(at);
-        double left = span - std::fmod(pos, span);
-        if (left < 1e-9 || std::fabs(left - span) < 1e-9) left = span;   // a whole bar
+        int bar = meter.bar_and_beat(pos).first;
+        // from a bar line, a whole bar
+        double left = meter.position(bar + 1) - pos;
+        if (left < 1e-9) left = meter.position(++bar + 1) - pos;
         const Note *nearby = note_after(at);
         if (!nearby) nearby = note_before(at);
         Note rest({kRest}, nearby ? nearby->pitch : kDefaultPitch, left);
         notes().insert(notes().begin() + at, rest);
         touch();
         sync(at);
-        say(W("rest to the end of bar " + std::to_string(bar_and_beat(pos, signature()).first) + ": " +
-              beat_count(std::nearbyint(left * 1e6) / 1e6)));
+        say(W("rest to the end of bar " + std::to_string(bar) + ": " + beat_count(std::nearbyint(left * 1e6) / 1e6)));
     });
 }
 
 //: Where each note starts, as "bar:beat".
 std::vector<std::string> Studio::bars() {
     std::vector<std::string> out;
+    Meter meter = song_.meter();
     double at = 0;
     for (const Note &n : notes()) {
-        auto bb = bar_and_beat(at, signature());
+        auto bb = meter.bar_and_beat(at);
         out.push_back(std::to_string(bb.first) + ":" + fmt_g(std::nearbyint(bb.second * 1000) / 1000));
         at += n.beats;
     }
@@ -1494,7 +1511,7 @@ void Studio::nudge_length(bool up) {
             ++moved;
         }
         if (!moved) {
-            announce_note(W(spoken_length(notes()[size_t(rows[0])].sounds(), signature()) +
+            announce_note(W(spoken_length(notes()[size_t(rows[0])].sounds(), sig_at(rows[0])) +
                             ", the shortest a nudge will make it. Edit the note to go shorter."),
                           list_, rows[0]);
             return;
@@ -1502,7 +1519,7 @@ void Studio::nudge_length(bool up) {
         touch();
         sync_lengths(rows);
         preview_note(rows[0]);
-        std::string message = rows.size() == 1 ? spoken_length(notes()[size_t(rows[0])].sounds(), signature())
+        std::string message = rows.size() == 1 ? spoken_length(notes()[size_t(rows[0])].sounds(), sig_at(rows[0]))
                                                : std::to_string(moved) + " notes a sixteenth " +
                                                      (up ? "longer" : "shorter");
         announce_note(W(message), list_, rows[0]);
@@ -1526,7 +1543,7 @@ void Studio::scale_length(double factor) {
             ++moved;
         }
         if (!moved) {
-            announce_note(W(spoken_length(notes()[size_t(rows[0])].sounds(), signature()) +
+            announce_note(W(spoken_length(notes()[size_t(rows[0])].sounds(), sig_at(rows[0])) +
                             ", and half of that is shorter than a nudge will go. Edit the note to go shorter."),
                           list_, rows[0]);
             return;
@@ -1534,7 +1551,7 @@ void Studio::scale_length(double factor) {
         touch();
         sync_lengths(rows);
         preview_note(rows[0]);
-        std::string message = rows.size() == 1 ? spoken_length(notes()[size_t(rows[0])].sounds(), signature())
+        std::string message = rows.size() == 1 ? spoken_length(notes()[size_t(rows[0])].sounds(), sig_at(rows[0]))
                                                : std::to_string(moved) + " notes " +
                                                      (factor > 1 ? "twice as long" : "half as long");
         announce_note(W(message), list_, rows[0]);
@@ -1828,7 +1845,7 @@ void Studio::on_add_controller(wxCommandEvent &) {
         ControllerDialog dlg(this, this, Note::tempo_change(0), voice_at(insertion_point()));
         if (dlg.ShowModal() != wxID_OK) return;
         Note c = dlg.result();
-        if (c.tempo <= 0 && !c.voice_id && !c.pan && c.controls.empty()) {
+        if (c.tempo <= 0 && !c.sig && !c.voice_id && !c.pan && c.controls.empty()) {
             say("nothing was filled in, so no controller was added");
             return;
         }
@@ -1844,24 +1861,29 @@ void Studio::on_add_controller(wxCommandEvent &) {
 std::string Studio::controller_said(int i) {
     const Note &c = notes()[size_t(i)];
     double at = position(i);
-    auto bb = bar_and_beat(at, signature());
+    auto bb = song_.meter().bar_and_beat(at);
     std::string where = "bar " + std::to_string(bb.first) + " beat " + fmt_g(std::nearbyint(bb.second * 1000) / 1000);
-    if (c.tempo <= 0 && !c.voice_id && !c.pan && c.controls.empty()) return "nothing at " + where + ". Delete removes it";
+    if (c.tempo <= 0 && !c.sig && !c.voice_id && !c.pan && c.controls.empty())
+        return "nothing at " + where + ". Delete removes it";
     std::string out;
     auto add = [&](const std::string &s) { out += (out.empty() ? "" : ", ") + s; };
     if (c.voice_id) add("voice " + voice_name(*c.voice_id));
     if (c.pan) add("pan " + std::to_string(*c.pan));
     if (!c.controls.empty()) add(describe_controls(c));
     if (!out.empty()) out += " from " + where;
-    if (c.tempo <= 0) return out;
-    out += (out.empty() ? "tempo " + fmt_g(c.tempo) + " from " + where : ", and tempo " + fmt_g(c.tempo)) +
-           ", for the whole song";
+    if (c.tempo <= 0 && !c.sig) return out;
+    // what it changes for the whole song
+    std::string whole;
+    if (c.tempo > 0) whole = "tempo " + fmt_g(c.tempo);
+    if (c.sig) whole += (whole.empty() ? "" : " and ") + std::string("time signature ") + format_sig(*c.sig);
+    out += (out.empty() ? whole + " from " + where : ", and " + whole) + ", for the whole song";
     // the same beat changed elsewhere too: the track higher up wins
     for (size_t k = 0; k < song_.tracks.size(); ++k) {
         if (int(k) == current_) continue;
         double b = 0;
         for (const Note &n : song_.tracks[k].notes) {
-            if (n.controller && n.tempo > 0 && std::fabs(b - at) < 1e-6) {
+            bool same = (c.tempo > 0 && n.tempo > 0) || (c.sig && n.sig);
+            if (n.controller && same && std::fabs(b - at) < 1e-6) {
                 out += ". " + song_.tracks[k].name + " changes it there too, and the track higher up wins";
                 return out;
             }
@@ -1953,7 +1975,7 @@ RenderRequest Studio::playback(double start) { return request(nullptr, start); }
 std::shared_ptr<const std::vector<float>> Studio::ticked(const Mixed &res) const {
     if (!mi_metronome_->IsChecked() || !res.samples) return res.samples;
     auto y = std::make_shared<std::vector<float>>(*res.samples);
-    with_metronome(*y, res.channels, song_.clock(), bar_beats(signature()), play_from_, res.lead);
+    with_metronome(*y, res.channels, song_.clock(), song_.meter(), play_from_, res.lead);
     return y;
 }
 
@@ -2114,11 +2136,11 @@ void Studio::start_playing(double start, bool quiet) {
     mi_play_->Enable(false);
     if (!quiet && backed) {
         // how long a backing track's file runs on is not known until it is read
-        auto bb = bar_and_beat(start, signature());
+        auto bb = song_.meter().bar_and_beat(start);
         say(W(printf_s("rendering %s from bar %d beat %s", plural(live.size(), "track").c_str(), bb.first,
                        fmt_g(std::nearbyint(bb.second * 100) / 100).c_str())));
     } else if (!quiet) {
-        auto bb = bar_and_beat(start, signature());
+        auto bb = song_.meter().bar_and_beat(start);
         say(W(printf_s("rendering %s from bar %d beat %s, about %.1f seconds", plural(live.size(), "track").c_str(),
                        bb.first, fmt_g(std::nearbyint(bb.second * 100) / 100).c_str(),
                        song_.clock().seconds(total) - song_.clock().seconds(start))));
@@ -2748,9 +2770,10 @@ void Studio::take_midi(const std::string &path, bool append) {
         say(W(std::string("cannot import: ") + e.what()));
         return;
     }
-    // the tempo changes on a track of their own, above the parts
+    // the tempo and time signature changes on a track of their own, above the parts
     std::vector<Track> tracks;
-    if (!got.tempo_changes.empty()) tracks.push_back(tempo_track(got.tempo_changes));
+    bool tempo_map = !got.tempo_changes.empty() || !got.sig_changes.empty();
+    if (tempo_map) tracks.push_back(tempo_track(got.tempo_changes, got.sig_changes));
     int program = track().program;
     size_t sung = 0;
     for (const ImportedPart &p : got.parts) {
@@ -2793,10 +2816,10 @@ void Studio::take_midi(const std::string &path, bool append) {
           ", " + std::to_string(total) + " notes, " + fmt_g(std::nearbyint(got.bpm)) + " bpm, " + format_sig(got.sig) +
           (append ? ", its tempo and time signature now the song's" : "")));
     if (got.closed_rests) say(W(plural(size_t(got.closed_rests), "short rest") + " closed"));
-    if (!got.tempo_changes.empty()) {
+    if (tempo_map) {
         sync_tracks(int(first) + 1);
         sync(0);
-        say(W(plural(got.tempo_changes.size(), "tempo change") +
+        say(W(tempo_map_said(got.tempo_changes.size(), got.sig_changes.size()) +
               (append ? " on a Tempo track above its parts" : " on the Tempo track at the top")));
     }
     bool any_pending = false, any_words = false;

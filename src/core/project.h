@@ -89,11 +89,14 @@ struct Note {
     //: nothing. `voice_id` is the voice this track sings with from here on,
     //: any engine's, its name kept as a track keeps it (Track::voice_name).
     //: `pan` is the track's pan from here on, -100 to 100, whatever sings it.
+    //: `sig` is the time signature from here on, for the whole song as the
+    //: tempo is, a new bar beginning where it stands.
     bool controller = false;
     double tempo = 0;
     std::optional<int> voice_id;
     std::optional<std::string> voice_name;
     std::optional<int> pan;
+    std::optional<Sig> sig;
 
     Note() = default;
     Note(std::vector<std::string> ph, int p = kDefaultPitch, double b = kDefaultBeats,
@@ -112,7 +115,7 @@ struct Note {
         return phonemes == o.phonemes && pitch == o.pitch && beats == o.beats &&
                word == o.word && bend == o.bend && mod == o.mod && velocity == o.velocity &&
                controls == o.controls && hold == o.hold && controller == o.controller && tempo == o.tempo &&
-               voice_id == o.voice_id && voice_name == o.voice_name && pan == o.pan;
+               voice_id == o.voice_id && voice_name == o.voice_name && pan == o.pan && sig == o.sig;
     }
 };
 
@@ -184,6 +187,29 @@ struct Clock {
 //: The changes in order, one to a beat, none at the start or out of range.
 std::vector<TempoChange> clean_tempo_changes(std::vector<TempoChange> changes);
 
+//: From `beat` on, counted from the song's start, the bars are of `sig`, the
+//: first of them beginning there.
+struct SigChange {
+    double beat = 0;
+    Sig sig = kDefaultSig;
+    bool operator==(const SigChange &o) const { return beat == o.beat && sig == o.sig; }
+};
+
+//: Where the bars fall: a time signature from the start, then its changes,
+//: each beginning a new bar; a bar one cuts short is still a bar.
+struct Meter {
+    Sig sig = kDefaultSig;
+    std::vector<SigChange> changes;     // in order, all after the first beat
+    //: (bar, beat) as bar_and_beat has them; before the first beat, bar 0 and below
+    std::pair<int, double> bar_and_beat(double position) const;
+    //: the beats from the song's start to `beat` of `bar`: bar_and_beat turned round
+    double position(int bar, double beat = 1) const;
+    Sig sig_at(double position) const;
+};
+
+//: The changes in order, one to a beat, none at the start or not a signature.
+std::vector<SigChange> clean_sig_changes(std::vector<SigChange> changes);
+
 //: Everything a song is, apart from the window's own state.
 struct Song {
     //: the tempo it starts at; the tempo changes are controllers on its tracks
@@ -207,6 +233,8 @@ struct Song {
     //: at one beat, the one higher up wins, and one at the very start is the
     //: tempo the song starts at
     Clock clock() const;
+    //: the time signature and every track's changes of it, as clock() has the tempo
+    Meter meter() const;
 };
 
 //: A song begun afresh, a new one or one imported from MIDI: with the
@@ -216,17 +244,21 @@ constexpr int kVocalWriterPortamento = 40;
 constexpr Reverb kVocalWriterReverb{40, 24};
 Song fresh_song();
 
-//: A track of rests holding the tempo changes, each at its beat: how an
-//: imported song brings its changes in, wherever they fall.
-Track tempo_track(const std::vector<TempoChange> &changes);
+//: A track of rests holding the tempo and time signature changes, each at
+//: its beat: how an imported song brings its changes in, wherever they fall.
+Track tempo_track(const std::vector<TempoChange> &changes, const std::vector<SigChange> &sigs = {});
+//: what the Tempo track holds, as said: "2 tempo changes and 1 time
+//: signature change"; empty for none
+std::string tempo_map_said(size_t tempos, size_t sigs);
 //: whether a track has a note anybody sings
 bool sings(const Track &track);
 //: the track's changes of voice, as (beat, voice), in order
 std::vector<std::pair<double, int>> voice_changes(const Track &track);
 //: the song at its starting tempo throughout, every tempo change taken out
 void steady_tempo(Song &song);
-//: steady_tempo, and the tracks that held nothing but tempo changes taken out
-//: with them, as an imported song's Tempo track
+//: steady_tempo, every time signature change taken out too, and the tracks
+//: that held nothing but those changes taken out with them, as an imported
+//: song's Tempo track
 void drop_tempo_map(Song &song);
 
 // -- what is shown --------------------------------------------------------
@@ -335,6 +367,8 @@ struct Imported {
     //: the tempo changes after the start, in the file's beats
     std::vector<TempoChange> tempo_changes;
     Sig sig = kDefaultSig;
+    //: and the time signature's
+    std::vector<SigChange> sig_changes;
     std::vector<ImportedPart> parts;
     //: how many short rests were closed (close_short_rests)
     int closed_rests = 0;

@@ -234,9 +234,10 @@ private:
 };
 
 //: A controller: one change from where it stands in the track on, chosen
-//: first. The voice is the track's from there, any engine's; the tempo is
-//: the whole song's, whichever track it is on; or one of VocalWriter's
-//: controls, as a note carries them, of those the voice in force sings.
+//: first. The voice is the track's from there, any engine's; the tempo and
+//: the time signature are the whole song's, whichever track they are on; or
+//: one of VocalWriter's controls, as a note carries them, of those the voice
+//: in force sings.
 class ControllerDialog : public wxDialog {
 public:
     //: `voice_before`: the voice the track sings with up to the controller
@@ -254,7 +255,7 @@ private:
     std::vector<std::string> engine_names_;
     std::vector<int> ids_;      // the voices in the voice box, in order
     wxChoice *kind_, *engine_, *voice_;
-    wxTextCtrl *tempo_, *pan_;
+    wxTextCtrl *tempo_, *sig_, *pan_;
     std::vector<std::pair<const NoteControl *, wxTextCtrl *>> controls_;
     //: the fields of each kind, in the order the first box lists them
     wxBoxSizer *outer_;

@@ -66,12 +66,16 @@ project too, the backing track as a part with no notes.
 notes that takes no time and is sung by nobody: a change from where it stands
 on. Its tempo change applies to the entire song, whichever track it is on --
 where two tracks change the tempo at one beat, the one higher up wins -- and
-mute and solo leave it in force. A pan change moves the track from there on,
+mute and solo leave it in force. A time signature change does the same, and
+a new bar begins where it stands, so the Bar column, Go to bar, a rest to the
+end of the bar, the metronome and Export MIDI count the bars by it from
+there; Song settings keeps the one the song starts with. A pan change moves the track from there on,
 whatever sings it. Every engine sings to the tempo, 5 to 500 beats a minute
 (VocalWriter's went from 10 to 250), and VocalWriter's voices take the
-changes as their own song's. A MIDI file's tempo changes come in on a Tempo
-track at the top, rests and controllers alone, so each one falls exactly
-where the file has it. The project keeps a track's controllers beside its
+changes as their own song's. A MIDI file's tempo and time signature changes
+come in on a Tempo track at the top, rests and controllers alone, so each
+one falls exactly where the file has it; a file with neither has no Tempo
+track. The project keeps a track's controllers beside its
 notes, so a song without any is the same file as before.
 
 **VocalWriter's controls** are kept on the notes as its songs keep them: a
@@ -170,7 +174,7 @@ changes and time signature take the place of the song's.
 
 **Export MIDI** (File > Export MIDI, Ctrl+Shift+M) writes the song as a
 type 1 Standard MIDI File, as VocalWriter's own File > Export did: 240 ticks
-a beat, the time signature and the tempo and its changes on a first track,
+a beat, the time signature and the tempo, and the changes of each, on a first track,
 then a track for each part with something to sing or play, on the MIDI
 channel asked for first -- VocalWriter's Set MIDI Channels: the drum kit on
 channel 10 and the others from 1 up to begin with. A sung note carries its
@@ -446,7 +450,7 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+Shift+W | add a word to the notes already there, from the selected one on |
 | Ctrl+Shift+X | add a text to the notes already there, from the selected one on |
 | Ctrl+Shift+R | a rest to the end of the bar |
-| Ctrl+Shift+C | add a controller: a tempo change for the entire song |
+| Ctrl+Shift+C | add a controller: a tempo or time signature change for the entire song |
 | Ctrl+E, or Enter on a note | edit it, including its pitch bend |
 | Ctrl+D, or Delete | remove it |
 | Alt+Up / Alt+Down | transpose a semitone |

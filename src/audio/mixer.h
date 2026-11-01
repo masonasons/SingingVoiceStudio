@@ -73,8 +73,8 @@ struct RenderRequest {
     bool anticipate = true;
     std::vector<PartRequest> tracks;
     std::vector<BackingRequest> backings;
-    //: beats to the bar, when the metronome is wanted (never in an export)
-    std::optional<double> metronome_bar;
+    //: where the bars fall, when the metronome is wanted (never in an export)
+    std::optional<Meter> metronome;
     Clock clock() const { return {bpm, tempo_changes}; }
 };
 
@@ -188,10 +188,10 @@ private:
     Mixed last_;
 };
 
-//: One tick of the metronome mixed in, accented at each bar line; `start` is
-//: the beat the audio begins on, `lead` seconds into it, so the ticks stay
-//: on the song's beats.
-void with_metronome(std::vector<float> &y, int channels, const Clock &clock, double bar_beats,
+//: One tick of the metronome mixed in, accented at each bar line `meter`
+//: puts; `start` is the beat the audio begins on, `lead` seconds into it, so
+//: the ticks stay on the song's beats.
+void with_metronome(std::vector<float> &y, int channels, const Clock &clock, const Meter &meter,
                     double start, double lead = 0);
 
 }  // namespace svs

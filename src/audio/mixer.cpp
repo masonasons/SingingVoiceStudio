@@ -404,18 +404,29 @@ const Track *in_song(const Song &song, const Track *t) {
 
 }  // namespace
 
-void with_metronome(std::vector<float> &y, int channels, const Clock &clock, double bar_beats,
+void with_metronome(std::vector<float> &y, int channels, const Clock &clock, const Meter &meter,
                     double start, double lead) {
     const double kClickHz = 1000.0, kAccentHz = 1600.0, kLevel = 0.22;
     std::vector<float> plain = click(kClickHz, kLevel), accent = click(kAccentHz, kLevel * 1.4);
     size_t n = y.size() / size_t(channels);
     std::vector<float> ticks(n, 0.0f);
-    long beats = std::max(1L, round_half_even(bar_beats));   // keeps 3/4, 6/8 and 7/8
+    // the bars counted in whole beats from the first beat of each signature
+    auto bar_line = [&meter](long k) {
+        double from = 0;
+        Sig sig = meter.sig;
+        for (const SigChange &c : meter.changes)
+            if (c.beat <= double(k) + 1e-9) {
+                from = c.beat;
+                sig = c.sig;
+            }
+        long beats = std::max(1L, round_half_even(bar_beats(sig)));   // keeps 3/4, 6/8 and 7/8
+        return (k - long(std::ceil(from - 1e-9))) % beats == 0;
+    };
     long k = long(std::ceil(start - 1e-9));
     while (true) {
         long at = round_half_even((clock.seconds(double(k)) - clock.seconds(start) + lead) * kSampleRate);
         if (at >= long(n)) break;
-        const std::vector<float> &tick = (k % beats == 0) ? accent : plain;
+        const std::vector<float> &tick = bar_line(k) ? accent : plain;
         for (size_t i = 0; i < tick.size(); ++i) {
             long j = at + long(i);
             if (j >= 0 && j < long(n)) ticks[size_t(j)] += tick[i];
@@ -1024,10 +1035,10 @@ std::vector<float> Mixer::track(const PartRequest &t, const Clock &clock, double
 Mixed Mixer::mix(const RenderRequest &req) {
     std::lock_guard<std::mutex> lock(mu_);
     Mixed res = mix_locked(req);
-    if (res.ok && req.metronome_bar) {
+    if (res.ok && req.metronome) {
         // on a copy: the song kept for next time is only ever the singing
         auto ticked = std::make_shared<std::vector<float>>(*res.samples);
-        with_metronome(*ticked, res.channels, req.clock(), *req.metronome_bar, req.start, res.lead);
+        with_metronome(*ticked, res.channels, req.clock(), *req.metronome, req.start, res.lead);
         res.samples = ticked;
     }
     return res;
@@ -1061,7 +1072,7 @@ RenderResult Mixer::render(const RenderRequest &req, const std::string &out_path
     res.path = out_path;
     if (!m.ok) return res;
     std::vector<float> y = *m.samples;
-    if (req.metronome_bar) with_metronome(y, m.channels, req.clock(), *req.metronome_bar, req.start, m.lead);
+    if (req.metronome) with_metronome(y, m.channels, req.clock(), *req.metronome, req.start, m.lead);
     if (!write_wav(out_path, y, m.channels)) {
         res.ok = false;
         res.error = "could not write " + out_path;
@@ -1074,7 +1085,7 @@ Mixed Mixer::mix_locked(const RenderRequest &req, bool whole) {
     // the metronome is put on afterwards and is no part of the key, so
     // switching it on and off never sings anything again
     RenderRequest core = req;
-    core.metronome_bar.reset();
+    core.metronome.reset();
     std::string key = request_key(core) + (whole ? "whole" : "");
     mixing_since_ = clock_ + 1;
     if (last_.ok && key == last_key_) {

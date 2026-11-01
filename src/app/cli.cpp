@@ -157,7 +157,8 @@ Song open_song(const std::string &path, double close_rests, bool sing_all, bool 
     Song song = fresh_song();
     song.bpm = got.bpm;
     song.sig = got.sig;
-    if (!got.tempo_changes.empty()) song.tracks.push_back(tempo_track(got.tempo_changes));
+    if (!got.tempo_changes.empty() || !got.sig_changes.empty())
+        song.tracks.push_back(tempo_track(got.tempo_changes, got.sig_changes));
     size_t total = 0;
     for (const auto &p : got.parts) {
         song.tracks.push_back(imported_track(p));
@@ -165,9 +166,9 @@ Song open_song(const std::string &path, double close_rests, bool sing_all, bool 
     }
     say("imported " + std::to_string(got.parts.size()) + " track" + s_if(got.parts.size()) + ", " +
         std::to_string(total) + " notes, " + fmt_g(std::nearbyint(got.bpm)) + " bpm" +
-        (got.tempo_changes.empty() ? std::string()
-                                   : ", " + std::to_string(got.tempo_changes.size()) + " tempo change" +
-                                         s_if(got.tempo_changes.size()) + " on a Tempo track"));
+        (got.tempo_changes.empty() && got.sig_changes.empty()
+             ? std::string()
+             : ", " + tempo_map_said(got.tempo_changes.size(), got.sig_changes.size()) + " on a Tempo track"));
     if (!played.empty())
         say(std::to_string(played.size()) + " of them, the part" + s_if(played.size()) +
             " without words, played on the GM Soundbank");
@@ -385,12 +386,16 @@ int run_cli(const CliArgs &args) {
         for (const Track &t : song.tracks)
             for (const Note &x : t.notes) n += !x.controller;
         Clock clock = song.clock();
+        Meter meter = song.meter();
         say(std::to_string(song.tracks.size()) + " track" + s_if(song.tracks.size()) + ", " + std::to_string(n) +
             " notes, " + fmt_g(std::nearbyint(clock.bpm)) + " bpm" +
             (clock.changes.empty() ? std::string()
                                    : " and " + std::to_string(clock.changes.size()) + " tempo change" +
                                          s_if(clock.changes.size())) +
-            ", " + format_sig(song.sig));
+            ", " + format_sig(meter.sig) +
+            (meter.changes.empty() ? std::string()
+                                   : " and " + std::to_string(meter.changes.size()) + " time signature change" +
+                                         s_if(meter.changes.size())));
         if (args.output.empty() && args.tracks.empty() && args.save.empty()) return 0;
     }
     // a steady tempo: the song's own changes go too
@@ -426,7 +431,7 @@ int run_cli(const CliArgs &args) {
             for (Note n : t.notes) {
                 n.voice_id.reset();
                 n.voice_name.reset();
-                if (!n.controller || n.tempo > 0 || !n.controls.empty()) kept.push_back(n);
+                if (!n.controller || n.tempo > 0 || n.sig || !n.controls.empty()) kept.push_back(n);
             }
             t.notes = kept;
         }
@@ -440,12 +445,12 @@ int run_cli(const CliArgs &args) {
         return fail(e.what());
     }
     if (!args.save.empty()) {
-        // the tracks asked for, and any that only keep the tempo
+        // the tracks asked for, and any that only keep the tempo or the time signature
         Song kept = song;
         kept.tracks.clear();
         for (const Track &t : song.tracks) {
             bool tempo = false;
-            for (const Note &x : t.notes) tempo = tempo || (x.controller && x.tempo > 0);
+            for (const Note &x : t.notes) tempo = tempo || (x.controller && (x.tempo > 0 || x.sig));
             if (std::find(wanted.begin(), wanted.end(), &t) != wanted.end() || (tempo && !sings(t)))
                 kept.tracks.push_back(t);
         }
