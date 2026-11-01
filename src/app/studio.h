@@ -74,6 +74,13 @@ public:
     bool plain_held() const { return settings_.plain_held_vowels; }
     //: render notes on the current track's voice and play them
     void preview(const std::vector<Note> &notes, std::function<void()> done);
+    //: Render the current track alone, `put` on its rows `spots`, from row
+    //: `from` on, and play it if `wanted` still says so; `done` is told
+    //: whether it plays.
+    void preview_track(const std::vector<int> &spots, const std::vector<Note> &put, int from,
+                       std::function<bool()> wanted, std::function<void(bool)> done);
+    bool playing() { return player_.playing(); }
+    void stop_playing() { stop_audio(); }
     //: `marked`: with the dictionary's syllables marked (Lexicon::phonemes)
     void lookup(const std::vector<std::string> &words,
                 std::function<void(std::map<std::string, std::vector<std::string>>)> done,

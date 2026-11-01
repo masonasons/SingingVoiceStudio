@@ -148,10 +148,16 @@ AddWordDialog::AddWordDialog(wxWindow *parent, Studio *studio, int pitch, double
     build(beats);
 }
 
-AddWordDialog::AddWordDialog(wxWindow *parent, Studio *studio, std::vector<Note> existing, bool text)
+AddWordDialog::AddWordDialog(wxWindow *parent, Studio *studio, std::vector<Note> existing, bool text,
+                             std::vector<int> spots)
     : wxDialog(parent, wxID_ANY, text ? "Add text" : "Add word to existing note(s)"), studio_(studio),
-      pitch_(kDefaultPitch), existing_(std::move(existing)), text_(text) {
+      pitch_(kDefaultPitch), existing_(std::move(existing)), spots_(std::move(spots)), text_(text) {
     build(kDefaultBeats);
+}
+
+//: A preview still playing stops with the dialog.
+AddWordDialog::~AddWordDialog() {
+    if (playing_) studio_->stop_playing();
 }
 
 void AddWordDialog::build(double beats) {
@@ -181,10 +187,13 @@ void AddWordDialog::build(double beats) {
     wxButton *look = new wxButton(this, wxID_ANY, "&Look up");
     look->Bind(wxEVT_BUTTON, &AddWordDialog::on_look, this);
     row->Add(look, 0, wxALL, 3);
-    hear_ = new wxButton(this, wxID_ANY, "&Preview");
-    hear_->Bind(wxEVT_BUTTON, &AddWordDialog::on_preview, this);
-    hear_->Disable();
-    row->Add(hear_, 0, wxALL, 3);
+    // Add text's Preview is after the list instead
+    if (!text_) {
+        hear_ = new wxButton(this, wxID_ANY, "&Preview");
+        hear_->Bind(wxEVT_BUTTON, &AddWordDialog::on_preview, this);
+        hear_->Disable();
+        row->Add(hear_, 0, wxALL, 3);
+    }
     outer->Add(row, 0);
 
     count_ = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, 1, 1, 1);
@@ -221,6 +230,18 @@ void AddWordDialog::build(double beats) {
     });
     list_->OnKey([this](wxKeyEvent &e) { on_key(e); });
     caption(this, outer, text_ ? "Words of this text" : "Notes for this word", list_);
+
+    // the track with the text on it, from the word selected; Stop while it plays
+    if (text_) {
+        play_ = new wxButton(this, wxID_ANY, "&Preview");
+        play_->Bind(wxEVT_BUTTON, &AddWordDialog::on_play, this);
+        play_->Disable();
+        outer->Add(play_, 0, wxALL, 6);
+        play_timer_.SetOwner(this);
+        Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
+            if (playing_ && !studio_->playing()) show_stopped();
+        }, play_timer_.GetId());
+    }
 
     outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
     ok_ = wxDynamicCast(FindWindow(wxID_OK), wxButton);
@@ -352,7 +373,7 @@ void AddWordDialog::looked_text(std::vector<TextWord> words, std::map<std::strin
     count_->SetRange(1, most);
     count_->SetValue(std::min(want, most));
     build_rows();
-    hear_->Enable();
+    play_->Enable();
     if (ok_) ok_->Enable();
     show_count();
     std::string said = std::to_string(words_.size()) + (words_.size() == 1 ? " word" : " words") + " on " +
@@ -364,6 +385,7 @@ void AddWordDialog::looked_text(std::vector<TextWord> words, std::map<std::strin
         for (size_t i = 0; i < missing.size(); ++i) said += (i ? ", " : " ") + missing[i];
     }
     studio_->say(W(said));
+    if (playing_) start_play();
     count_->SetFocus();
 }
 
@@ -386,6 +408,8 @@ void AddWordDialog::edit_word(int i) {
     studio_->say(W(w.word + ", " + (w.phonemes.empty() ? std::string(kDefaultPhoneme) : spaced(w.phonemes)) +
                    ", on " + std::to_string(w.notes) + (w.notes == 1 ? " note" : " notes") + "; Notes to use " +
                    std::to_string(count_->GetValue())));
+    // a preview going on is heard again as it is now
+    if (playing_) start_play();
 }
 
 //: Notes to use put in the dialog, the first time something is looked up.
@@ -465,16 +489,19 @@ void AddWordDialog::refresh_row(int i) {
 
 void AddWordDialog::on_count(wxSpinEvent &) {
     if (!ready()) return;
-    build_rows();
     if (text_) {
+        // the word selected stays so, for a preview going on
+        build_rows(std::max(0, list_->FirstSelected()));
         // a whole text is too long to hear: where it gets to instead
         std::string last;
         for (const Note &n : rows_)
             if (!n.word.empty()) last = n.word;
         studio_->say(W(std::to_string(rows_.size()) + (rows_.size() == 1 ? " note" : " notes") + ", as far as " +
                        last));
+        if (playing_) start_play();
         return;
     }
+    build_rows();
     std::string all;
     for (const Note &n : rows_) all += (all.empty() ? "" : ", ") + n.text();
     studio_->say(W(std::to_string(rows_.size()) + " note" + (rows_.size() == 1 ? "" : "s") + ": " + all));
@@ -549,6 +576,64 @@ void AddWordDialog::on_preview(wxCommandEvent &) {
     studio_->preview(rows_, [alive, b]() {
         if (auto a = alive.lock(); a && *a) b->Enable();
     });
+}
+
+void AddWordDialog::on_play(wxCommandEvent &) {
+    if (!playing_) {
+        start_play();
+        return;
+    }
+    stop_play();
+    studio_->say("stopped");
+}
+
+//: The track alone with the text on it, from the first note of the word
+//: selected, as the words are now.
+void AddWordDialog::start_play() {
+    int i = std::max(0, list_->FirstSelected());
+    if (i >= int(words_.size()) || rows_.empty()) {
+        stop_play();
+        return;
+    }
+    // the notes the words before it take
+    int first = 0;
+    for (int k = 0; k < i && k < int(shares_.size()); ++k) first += shares_[size_t(k)];
+    if (size_t(i) >= shares_.size() || shares_[size_t(i)] <= 0 || first >= int(spots_.size())) {
+        stop_play();
+        studio_->say(W(words_[size_t(i)].word + " has no notes: the notes ran out before it"));
+        return;
+    }
+    int want = ++play_wanted_;
+    play_timer_.Stop();
+    playing_ = true;
+    play_->SetLabel("&Stop");
+    studio_->say(W("previewing from " + words_[size_t(i)].word));
+    auto alive = token();
+    studio_->preview_track(
+        spots_, rows_, spots_[size_t(first)],
+        [this, alive, want] {
+            auto a = alive.lock();
+            return a && *a && playing_ && play_wanted_ == want;
+        },
+        [this, alive, want](bool started) {
+            auto a = alive.lock();
+            if (!a || !*a || play_wanted_ != want) return;
+            if (started) play_timer_.Start(100);
+            else show_stopped();
+        });
+}
+
+//: Stop the preview, and any render on its way.
+void AddWordDialog::stop_play() {
+    ++play_wanted_;
+    if (playing_) studio_->stop_playing();
+    show_stopped();
+}
+
+void AddWordDialog::show_stopped() {
+    play_timer_.Stop();
+    playing_ = false;
+    if (play_) play_->SetLabel("&Preview");
 }
 
 // -- the two curves -------------------------------------------------------------------

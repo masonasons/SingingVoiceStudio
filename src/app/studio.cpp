@@ -1748,7 +1748,7 @@ void Studio::on_add_text(wxCommandEvent &) {
         return;
     }
     undoable("add text", [&] {
-        AddWordDialog dlg(this, this, existing, true);
+        AddWordDialog dlg(this, this, existing, true, spots);
         if (dlg.ShowModal() != wxID_OK) return;
         std::vector<Note> put = dlg.result();
         if (put.empty()) return;
@@ -1971,6 +1971,23 @@ void Studio::preview(const std::vector<Note> &rows, std::function<void()> done) 
     mix(request(new std::vector<Note>(rows)), [this, done](Mixed res) {
         if (done) done();
         if (res.ok) play_audio(res, true);
+    });
+}
+
+void Studio::preview_track(const std::vector<int> &spots, const std::vector<Note> &put, int from,
+                           std::function<bool()> wanted, std::function<void(bool)> done) {
+    Track copy = track();
+    for (size_t k = 0; k < put.size() && k < spots.size(); ++k)
+        if (spots[k] >= 0 && spots[k] < int(copy.notes.size())) copy.notes[size_t(spots[k])] = put[k];
+    double start = 0;
+    for (int i = 0; i < from && i < int(copy.notes.size()); ++i) start += copy.notes[size_t(i)].beats;
+    stop_audio();
+    // the track alone, muted or not, whatever else is soloed
+    std::vector<const Track *> one{&copy};
+    mix(request(nullptr, start, &one), [this, wanted, done](Mixed res) {
+        bool play = res.ok && wanted && wanted();
+        if (play) play_audio(res, true);
+        if (done) done(play && player_.playing());
     });
 }
 

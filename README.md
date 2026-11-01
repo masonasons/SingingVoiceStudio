@@ -260,7 +260,10 @@ set higher, the first words take a note more each, and set lower, the words
 at the end are left off. A word not in the dictionary sings AA, and "the"
 before a vowel is "thee". A tag in square brackets, [Verse 1] or [Harp], is
 left out, while words in round ones, a backing part's, are sung. A text
-only ever goes on notes already there.
+only ever goes on notes already there. Preview, after the list, plays the
+track alone with the text on it, from the word selected on, and is Stop
+while it plays; a word changed or Notes to use set while it plays is heard
+again at once, as it is now.
 
 ## Data you supply
 

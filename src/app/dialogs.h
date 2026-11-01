@@ -53,7 +53,10 @@ public:
     //: Add word to existing note(s): the word goes on `existing`, the notes
     //: that sound from the cursor on, each keeping all but what it sings.
     //: `text`: Add text, words divided by spaces put on them one after another.
-    AddWordDialog(wxWindow *parent, Studio *studio, std::vector<Note> existing, bool text = false);
+    //: `spots`: where each of `existing` is in the track, for Add text's preview.
+    AddWordDialog(wxWindow *parent, Studio *studio, std::vector<Note> existing, bool text = false,
+                  std::vector<int> spots = {});
+    ~AddWordDialog() override;
     std::vector<Note> result() const { return rows_; }
 
 private:
@@ -76,10 +79,16 @@ private:
     void on_key(wxKeyEvent &evt);
     void on_edit(wxCommandEvent &);
     void on_preview(wxCommandEvent &);
+    //: Add text's Preview, or Stop while it plays
+    void on_play(wxCommandEvent &);
+    void start_play();
+    void stop_play();
+    void show_stopped();
 
     Studio *studio_;
     int pitch_;
     std::vector<Note> existing_;
+    std::vector<int> spots_;
     //: whether it is Add text, and the text's words once looked up
     bool text_ = false;
     std::vector<TextWord> words_;
@@ -88,9 +97,15 @@ private:
     std::vector<std::string> phonemes_;
     std::vector<Note> rows_;
     wxTextCtrl *word_, *beats_ = nullptr;
-    wxButton *hear_, *ok_;
+    wxButton *hear_ = nullptr, *ok_;
     wxSpinCtrl *count_;
     ReportList *list_;
+    //: Add text's preview: the button after the list, a timer that sees it
+    //: has finished, and which render is wanted, so a late one is not played
+    wxButton *play_ = nullptr;
+    wxTimer play_timer_;
+    bool playing_ = false;
+    int play_wanted_ = 0;
 };
 
 //: The curves a note carries, the bend, the mod wheel and VocalWriter's
