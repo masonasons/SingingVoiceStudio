@@ -134,7 +134,11 @@ Song open_song(const std::string &path, double close_rests, bool sing_all, bool 
     }
     if (!is_midi_file(path)) return load_project(path);
     std::vector<std::string> names, played;
-    std::vector<MidiPart> parts = midi_parts(path);
+    // an unnamed part is called after what the default soundbank plays it with
+    ProgramNames program_names;
+    if (slot >= 0)
+        program_names = [slot](int program, bool drums) { return soundfont_program_name(program, drums, slot); };
+    std::vector<MidiPart> parts = midi_parts(path, -1, program_names);
     for (const auto &p : parts) names.push_back(p.name);
     if (names.empty()) throw std::runtime_error(base_name(path) + " has no notes in it");
     // the parts without words played by the default soundbank, if it can play
@@ -144,7 +148,7 @@ Song open_song(const std::string &path, double close_rests, bool sing_all, bool 
     else if (!sing_all) say("every part is sung: the GM Soundbank cannot play here (" + why + ")");
     // the GM Soundbank's own instruments an octave off; a SoundFont's are not
     Imported got = import_midi(path, names, close_rests, played, remove_velocities, -1, vocalwriter_program_voices(),
-                               close_word_rests, octaves && slot < 0, remove_volumes);
+                               close_word_rests, octaves && slot < 0, remove_volumes, program_names);
     if (slot >= 0)
         for (ImportedPart &p : got.parts)
             if (p.played) play_on_soundfont(p.voice_id, p.notes, slot);

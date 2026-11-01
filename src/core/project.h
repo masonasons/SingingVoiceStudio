@@ -7,6 +7,7 @@
 // in it; that is what Export WAV is for.
 #pragma once
 
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -318,7 +319,12 @@ std::string song_fingerprint(const Song &song);
 // -- MIDI --------------------------------------------------------------------
 
 //: The tracks worth importing, as [(name, note count)].
-std::vector<std::pair<std::string, int>> midi_tracks(const std::string &path);
+//: The name a part the file leaves unnamed is given after its program,
+//: 0-127, and whether it is the drums: the instrument or drum kit the default
+//: soundbank plays it with. Empty is the GM Soundbank's name for the program
+//: (gm_program_name), and "Drums" for the drums.
+using ProgramNames = std::function<std::string(int, bool)>;
+std::vector<std::pair<std::string, int>> midi_tracks(const std::string &path, const ProgramNames &program_names = {});
 
 //: A track of a MIDI file as the import offers it.
 struct MidiPart {
@@ -334,7 +340,8 @@ struct MidiPart {
 };
 //: `lyrics_on`: the channel a type 0 file's lyrics go to (lyric_choice);
 //: -1 for the one most of them fall on.
-std::vector<MidiPart> midi_parts(const std::string &path, int lyrics_on = -1);
+std::vector<MidiPart> midi_parts(const std::string &path, int lyrics_on = -1,
+                                 const ProgramNames &program_names = {});
 //: The channels a type 0 file's lyrics could be sung on, and the likeliest;
 //: none when there is nothing to choose (one channel, or no lyrics).
 struct LyricChoice {
@@ -389,7 +396,7 @@ struct Imported {
 Imported import_midi(const std::string &path, const std::vector<std::string> &names, double close_rests = 0,
                      const std::vector<std::string> &played = {}, bool remove_velocities = false,
                      int lyrics_on = -1, const std::vector<int> &programs = {}, bool close_word_rests = false,
-                     bool octaves = false, bool remove_volumes = false);
+                     bool octaves = false, bool remove_volumes = false, const ProgramNames &program_names = {});
 
 // -- tracks an instrument plays ---------------------------------------------
 

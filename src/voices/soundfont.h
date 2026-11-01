@@ -35,6 +35,8 @@ struct SoundFontPreset {
     bool drums = false;
     //: the preset's name, made unique within the SoundFont
     std::string name;
+    //: and as the file has it
+    std::string plain;
 };
 
 struct SoundFontInfo {
@@ -75,6 +77,11 @@ int soundfont_slot(const std::string &path);
 //: `drum_program` or 0, or failing that any of its kits. The GM Soundbank's
 //: own voice if the SoundFont has nothing for it.
 int soundfont_voice_for(int gm_voice, int slot, int drum_program = 0);
+//: What a part the file leaves unnamed is called after its program, when the
+//: SoundFont in `slot` plays it: its preset's name, or for the drums its
+//: kit's (soundfont_voice_for). If the SoundFont has nothing for it, the GM
+//: Soundbank's name, and "Drums" for the drums.
+std::string soundfont_program_name(int program, bool drums, int slot);
 //: An imported part played by the SoundFont in `slot` rather than the GM
 //: Soundbank: its voice, and every voice its controllers change to.
 void play_on_soundfont(std::optional<int> &voice, std::vector<Note> &notes, int slot);

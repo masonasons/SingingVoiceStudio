@@ -831,15 +831,19 @@ bool drum_track(const MidiTrack &track);
 
 //: Every track with notes, each with a name of its own: MIDI files routinely
 //: leave every track unnamed, so an unnamed one is named after its
-//: instrument, and a repeated name is numbered.
-std::vector<std::pair<std::string, const MidiTrack *>> named_tracks(const MidiFile &midi) {
+//: instrument, as `program_names` names it, and a repeated name is numbered.
+std::vector<std::pair<std::string, const MidiTrack *>> named_tracks(const MidiFile &midi,
+                                                                    const ProgramNames &program_names) {
     std::vector<std::pair<std::string, const MidiTrack *>> out;
     std::map<std::string, int> seen;
     for (const MidiTrack &t : midi.tracks) {
         if (t.notes.empty()) continue;
+        int program = std::max(0, program_at_start(t));
+        bool drums = drum_track(t);
         std::string base = !t.name.empty() ? t.name
-                           : drum_track(t) ? std::string("Drums")
-                                           : std::string(gm_program_name(std::max(0, program_at_start(t))));
+                           : program_names ? program_names(program, drums)
+                           : drums         ? std::string("Drums")
+                                           : std::string(gm_program_name(program));
         int k = ++seen[base];
         out.push_back({k == 1 ? base : base + " " + std::to_string(k), &t});
     }
@@ -1411,10 +1415,10 @@ ImportedPart from_midi_played(const MidiFile &midi, const MidiTrack &track, cons
 
 int MidiPart::voice() const { return drums ? kGmDrums : kGmBase + std::max(0, program); }
 
-std::vector<MidiPart> midi_parts(const std::string &path, int lyrics_on) {
+std::vector<MidiPart> midi_parts(const std::string &path, int lyrics_on, const ProgramNames &program_names) {
     MidiFile midi = read_midi(path, lyrics_on);
     std::vector<MidiPart> out;
-    for (const auto &nt : named_tracks(midi)) {
+    for (const auto &nt : named_tracks(midi, program_names)) {
         MidiPart p;
         p.name = nt.first;
         p.notes = int(nt.second->notes.size());
@@ -1577,19 +1581,19 @@ std::vector<Note> lay_out_played(std::vector<PlayedNote> notes, std::vector<Play
     return all;
 }
 
-std::vector<std::pair<std::string, int>> midi_tracks(const std::string &path) {
+std::vector<std::pair<std::string, int>> midi_tracks(const std::string &path, const ProgramNames &program_names) {
     MidiFile midi = read_midi(path);
     std::vector<std::pair<std::string, int>> out;
-    for (const auto &nt : named_tracks(midi)) out.push_back({nt.first, int(nt.second->notes.size())});
+    for (const auto &nt : named_tracks(midi, program_names)) out.push_back({nt.first, int(nt.second->notes.size())});
     return out;
 }
 
 Imported import_midi(const std::string &path, const std::vector<std::string> &names, double close_rests,
                      const std::vector<std::string> &played, bool remove_velocities, int lyrics_on,
                      const std::vector<int> &programs, bool close_word_rests, bool octaves,
-                     bool remove_volumes) {
+                     bool remove_volumes, const ProgramNames &program_names) {
     MidiFile midi = read_midi(path, lyrics_on);
-    auto named = named_tracks(midi);
+    auto named = named_tracks(midi, program_names);
     if (named.empty()) throw std::runtime_error("this file has no notes in it");
     double grid = midi_grid(midi);
     Imported out;

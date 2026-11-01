@@ -92,7 +92,7 @@ bool read_presets(const std::string &path, std::vector<SoundFontPreset> *out, st
             for (size_t i = 0; i + 1 < size / 38; ++i) {
                 const unsigned char *r = b.data() + i * 38;
                 SoundFontPreset p;
-                p.name = preset_name(r);
+                p.name = p.plain = preset_name(r);
                 p.program = le16(r + 20);
                 p.bank = le16(r + 22);
                 p.drums = p.bank == 128 || (p.bank >= 120 && looks_like_kit(p.name));
@@ -477,6 +477,13 @@ int soundfont_voice_for(int gm_voice, int slot, int drum_program) {
         if (v < 0) v = find([&](const SoundFontPreset &p) { return !p.drums && p.program == program; });
     }
     return v < 0 ? gm_voice : v;
+}
+
+std::string soundfont_program_name(int program, bool drums, int slot) {
+    int voice = soundfont_voice_for(drums ? kGmDrums : kGmBase + program, slot);
+    std::optional<SoundFontPreset> p = soundfont_preset(voice);
+    if (p && !p->plain.empty()) return p->plain;
+    return drums ? "Drums" : gm_program_name(program);
 }
 
 void play_on_soundfont(std::optional<int> &voice, std::vector<Note> &notes, int slot) {

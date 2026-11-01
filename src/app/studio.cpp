@@ -2827,9 +2827,14 @@ void Studio::take_midi(const std::string &path, bool append) {
         else midi_waiting_ = path;
         return;
     }
+    // what plays the parts not sung, and so what an unnamed part is called
+    int slot = soundbank_slot();
+    ProgramNames program_names;
+    if (slot >= 0)
+        program_names = [slot](int program, bool drums) { return soundfont_program_name(program, drums, slot); };
     std::vector<MidiPart> parts;
     try {
-        parts = midi_parts(path);
+        parts = midi_parts(path, -1, program_names);
     } catch (const std::exception &e) {
         cannot_load(path, e.what());
         return;
@@ -2847,8 +2852,11 @@ void Studio::take_midi(const std::string &path, bool append) {
     bool ask_lyrics = choice.channels.size() > 1;
     // what a part is, as the boxes below say it: its instrument too, unless
     // named after it; not "with words" while which part sings is to be asked
-    auto described = [ask_lyrics](const MidiPart &p) {
-        std::string what = p.words && !ask_lyrics ? "with words" : p.drums ? "drums" : gm_program_name(p.program);
+    auto described = [ask_lyrics, slot](const MidiPart &p) {
+        std::string what = p.words && !ask_lyrics ? "with words"
+                           : p.drums              ? "drums"
+                           : slot >= 0            ? soundfont_program_name(p.program, false, slot)
+                                                  : gm_program_name(p.program);
         bool said = p.name.size() >= what.size() &&
                     std::equal(what.begin(), what.end(), p.name.begin(),
                                [](char a, char b) { return std::tolower((unsigned char)a) == std::tolower((unsigned char)b); });
@@ -2888,7 +2896,7 @@ void Studio::take_midi(const std::string &path, bool append) {
         for (const MidiPart &p : parts) wanted.push_back(p.name);
         try {
             parts.clear();
-            for (const MidiPart &p : midi_parts(path, lyrics_on))
+            for (const MidiPart &p : midi_parts(path, lyrics_on, program_names))
                 if (std::find(wanted.begin(), wanted.end(), p.name) != wanted.end()) parts.push_back(p);
         } catch (const std::exception &e) {
             cannot_load(path, e.what());
@@ -2899,7 +2907,6 @@ void Studio::take_midi(const std::string &path, bool append) {
     for (const auto &p : parts) names.push_back(p.name);
     // The parts with words are sung; the rest are played by the default
     // soundbank, a SoundFont or the GM Soundbank.
-    int slot = soundbank_slot();
     bool gm = false;
     for (const VoiceListing &v : voices_) gm = gm || (v.id == kGmBase && v.available);
     if (gm || slot >= 0) {
@@ -2932,7 +2939,7 @@ void Studio::take_midi(const std::string &path, bool append) {
         // the GM Soundbank's own instruments an octave off; a SoundFont's are not
         got = import_midi(path, names, rests_to_close(), played, settings_.remove_note_velocities, lyrics_on,
                           programs, settings_.close_word_rests, settings_.octave_instruments && slot < 0,
-                          settings_.remove_volume_changes);
+                          settings_.remove_volume_changes, program_names);
         if (slot >= 0)
             for (ImportedPart &p : got.parts)
                 if (p.played) play_on_soundfont(p.voice_id, p.notes, slot);

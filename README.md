@@ -174,7 +174,9 @@ unticked with Space and none ticked to begin with, so that they come in as
 parts to sing, their short rests closed and their notes on AA until words
 are put on them; with none ticked every part is played by the default soundbank.
 A part the file leaves unnamed is named after its
-instrument, the drum kit's "Drums", and so is each part of a track that plays
+instrument, as the default soundbank names the instrument it plays the part
+with: a SoundFont's own name for its preset, its drum kit's for the drums,
+and the GM Soundbank's drums "Drums", and so is each part of a track that plays
 on several channels, a type 0 file's or another's. Import asks first which
 parts come in, each ticked or unticked with Space: Every part, ticked to begin
 with, ticks or unticks all the others, so a few are chosen by unticking it and
