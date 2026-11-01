@@ -6,10 +6,9 @@
 # What comes out:
 #
 #   dist\SingingVoiceStudio\               the program, ready to run from anywhere
-#       SingingVoiceStudio.exe             the editor
+#       SingingVoiceStudio.exe             the editor, DECtalk compiled in
 #       svs.exe                            the same program on the command line
 #       assets\                            VocalWriter 2.0's tables, voices, bank, dictionary
-#       voices\dectalk\                    DECtalk.dll and its dictionary
 #       voices\microsoft\                  Sam, Mike and Mary
 #       licenses\                          each engine's licence
 #   dist\SingingVoiceStudio-<version>.zip  the same folder, zipped (the version
@@ -18,7 +17,8 @@
 # Where the data comes from:
 #
 #   VocalWriter   assets\ in this tree, or the VocalWriter repository beside it
-#   DECtalk       built from third_party\dectalk with Visual Studio (scripts\build_dectalk.ps1)
+#   DECtalk       compiled into the program from third_party\dectalk; its dictionary
+#                 is built from its word list with Visual Studio (scripts\build_dectalk.ps1)
 #   Microsoft     voices\microsoft in this tree, or the voices Windows has installed
 #                 (Common Files\SpeechEngines\Microsoft\TTS\1033, or XP's Microsoft Shared\Speech\1033)
 #   SSI-263       nothing: its phoneme ROM is compiled in
@@ -30,7 +30,7 @@
 # The zip carries KAE Labs' and Microsoft's data, so it is for your own
 # machines -- not something to publish.
 param(
-    [switch]$SkipDectalk,     # use the DECtalk.dll already in voices\dectalk
+    [switch]$SkipDectalk,     # use the dictionary already in voices\dectalk
     [switch]$SkipCompile,     # use the executables already in build\
     [switch]$Clean,           # rebuild the program from nothing
     [switch]$NoZip,
@@ -55,14 +55,16 @@ function Warn($text) {
     $script:missing += $text
 }
 
-# -- 1. DECtalk, with Visual Studio --------------------------------------------
+# -- 1. DECtalk's dictionary, with Visual Studio --------------------------------
+# compiled into the program with DECtalk; without it, the earlier build of
+# the same word list that comes with DECtalk's sources is compiled in
 if (-not $SkipDectalk) {
-    Say "building DECtalk"
+    Say "building DECtalk's dictionary"
     try {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build_dectalk.ps1")
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build_dectalk.ps1") -DictionaryOnly
         if ($LASTEXITCODE -ne 0) { throw "build_dectalk.ps1 failed ($LASTEXITCODE)" }
     } catch {
-        Warn "DECtalk did not build: $_"
+        Warn "DECtalk's dictionary did not build, so the one in its sources is used: $_"
     }
 }
 
@@ -134,14 +136,6 @@ if ($vwRoot) {
     if (Test-Path $agreement) { Put $agreement "licenses\VocalWriter License Agreement.rtf" }
 } else {
     Warn "VocalWriter's files were not found: put them in assets\, as the VocalWriter repository lays them out"
-}
-
-# DECtalk
-$dtDir = Join-Path $Root "voices\dectalk"
-foreach ($f in @("DECtalk.dll", "dtalk_us.dic")) {
-    $src = Join-Path $dtDir $f
-    if (Test-Path $src) { Put $src "voices\dectalk\$f" }
-    else { Warn "DECtalk's $f is missing from voices\dectalk" }
 }
 
 # Microsoft: a copy in this tree first, then what Windows has installed

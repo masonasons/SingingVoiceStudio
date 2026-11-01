@@ -2,10 +2,13 @@
 # dictionary from third_party\dectalk, and put them where the program looks
 # for them: voices\dectalk\DECtalk.dll and voices\dectalk\dtalk_us.dic.
 #
-# DECtalk builds with Microsoft's compiler only, so it is not part of the
-# CMake build; the program loads the DLL at run time (src/voices/dectalk.cpp).
+# The program compiles DECtalk in by itself (cmake/engines/dectalk.cmake),
+# and its dictionary too, which it takes from voices\dectalk if it is there:
+# -DictionaryOnly builds just that. The DLL is for a program built with
+# SVS_DECTALK_STATIC off, which loads it at run time (src/voices/dectalk.cpp),
+# and for tests/engines/dectalk built the same way.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\build_dectalk.ps1
+#   powershell -ExecutionPolicy Bypass -File scripts\build_dectalk.ps1 [-DictionaryOnly]
 #
 # The copied DLL then has DECtalk's scale of sung notes retuned to concert
 # pitch (see the end of this file); scripts/build_dectalk_mac.sh does the
@@ -17,7 +20,8 @@
 # used instead.
 param(
     [string]$MSBuild = "",
-    [switch]$NoBuild
+    [switch]$NoBuild,
+    [switch]$DictionaryOnly   # the dictionary alone, without the DLL
 )
 
 $ErrorActionPreference = "Stop"
@@ -77,11 +81,14 @@ if (-not $NoBuild) {
   </ItemDefinitionGroup>
 </Project>
 '@
-    foreach ($proj in @("dapi\src\DECtalk API.vcxproj", "dapi\src\Internal Dictionary Compiler.vcxproj")) {
+    $projects = @("dapi\src\DECtalk API.vcxproj", "dapi\src\Internal Dictionary Compiler.vcxproj")
+    if ($DictionaryOnly) { $projects = @($projects[1]) }
+    foreach ($proj in $projects) {
         & $MSBuild (Join-Path $Src $proj) "/p:Configuration=$Config" "/p:Platform=x64" "/p:SolutionDir=$Src" `
             "/p:ForceImportAfterCppTargets=$props" /m /nologo /v:minimal
         if ($LASTEXITCODE -ne 0) {
             if ($proj -like "*DECtalk API*") { throw "DECtalk.dll did not build (MSBuild returned $LASTEXITCODE)" }
+            if ($DictionaryOnly) { throw "The dictionary did not build (MSBuild returned $LASTEXITCODE)" }
             Write-Warning "The dictionary did not build (MSBuild returned $LASTEXITCODE)"
         }
     }
@@ -89,6 +96,13 @@ if (-not $NoBuild) {
 
 $dll = Join-Path $Src "dapi\build\dectalk\x64\$Config\DECtalk.dll"
 $dic = Join-Path $Src "dapi\build\dic\x64\$Config\dtalk_us.dic"
+if ($DictionaryOnly) {
+    if (-not (Test-Path $dic)) { throw "dtalk_us.dic was not built (looked for $dic)" }
+    New-Item -ItemType Directory -Force $Out | Out-Null
+    Copy-Item -Force $dic (Join-Path $Out "dtalk_us.dic")
+    Write-Host "Copied dtalk_us.dic to $Out"
+    exit 0
+}
 if (-not (Test-Path $dic)) {
     $dic = Join-Path $Root "third_party\dectalk\ports\emscripten\fs\dtalk_us.dic"
     Write-Host "No dictionary was built; using the prebuilt one at $dic"

@@ -41,8 +41,9 @@
 // DECtalk's ey must rise towards iy and its ay from aa towards iy, in the
 // singer as in DECtalk's own.
 //
-// The test drives DECtalk directly too, for the reference and the log, so it
-// needs DECtalk.dll in voices\dectalk like the singer does.
+// The test drives DECtalk directly too, for the reference and the log: the
+// DECtalk compiled in on Windows (cmake/engines/dectalk.cmake), or else the
+// library in voices\dectalk that the singer loads.
 //
 // Every file is checked for its length (the phrase's own, from its pitch
 // curve) and its peak.
@@ -59,6 +60,8 @@
 #include <vector>
 
 #ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
 #include <windows.h>
 #else
 #include <dlfcn.h>
@@ -387,6 +390,19 @@ bool formants(const std::vector<float> &x, double t, double *f1, double *f2) {
 
 // -- DECtalk itself, for the reference and the phoneme log --------------------
 
+#ifdef SVS_DECTALK_STATIC
+// compiled in (cmake/engines/dectalk.cmake)
+extern "C" {
+unsigned int TextToSpeechStartupExFonix(void **, unsigned int, unsigned long, void *, long, char *);
+unsigned int TextToSpeechSpeak(void *, char *, unsigned long);
+unsigned int TextToSpeechSync(void *);
+unsigned int TextToSpeechOpenWaveOutFile(void *, char *, unsigned long);
+unsigned int TextToSpeechCloseWaveOutFile(void *);
+unsigned int TextToSpeechOpenLogFile(void *, char *, unsigned long);
+unsigned int TextToSpeechCloseLogFile(void *);
+}
+#endif
+
 struct Direct {
     typedef unsigned int (*StartupFn)(void **, unsigned int, unsigned long, void *, long, char *);
     typedef unsigned int (*SpeakFn)(void *, char *, unsigned long);
@@ -399,6 +415,17 @@ struct Direct {
     void *h = nullptr;
 
     bool start() {
+#ifdef SVS_DECTALK_STATIC
+        // with the dictionary the singer has written out
+        std::string dir = settings_dir();
+        startup = TextToSpeechStartupExFonix;
+        speak = TextToSpeechSpeak;
+        sync = TextToSpeechSync;
+        open_wave = TextToSpeechOpenWaveOutFile;
+        close_wave = TextToSpeechCloseWaveOutFile;
+        open_log = TextToSpeechOpenLogFile;
+        close_log = TextToSpeechCloseLogFile;
+#else
         std::string dir = find_data("voices\\dectalk");
 #ifdef _WIN32
         HMODULE m = LoadLibraryW(widen(join_path(dir, "DECtalk.dll")).c_str());
@@ -420,6 +447,7 @@ struct Direct {
         open_log = reinterpret_cast<FileFn>(get("TextToSpeechOpenLogFile"));
         close_log = reinterpret_cast<HFn>(get("TextToSpeechCloseLogFile"));
         if (!startup || !speak || !sync || !open_wave || !close_wave || !open_log || !close_log) return false;
+#endif
         std::string dic = join_path(dir, "dtalk_us.dic");
         std::vector<char> d(dic.begin(), dic.end());
         d.push_back(0);
@@ -449,8 +477,23 @@ struct Direct {
         std::vector<char> p(path.begin(), path.end());
         p.push_back(0);
         if (open_log(h, p.data(), 0x0002)) return false;
+#ifdef SVS_DECTALK_STATIC
+        // DECtalk prints a little of the log to stdout too, which it shares
+        // with the test when compiled in; it is given nowhere to print it.
+        std::fflush(stdout);
+        int was = _dup(1), nowhere = _open("NUL", _O_WRONLY);
+        if (nowhere >= 0) _dup2(nowhere, 1);
+#endif
         say("[:log outphon on]" + text);
         close_log(h);
+#ifdef SVS_DECTALK_STATIC
+        std::fflush(stdout);
+        if (was >= 0) {
+            _dup2(was, 1);
+            _close(was);
+        }
+        if (nowhere >= 0) _close(nowhere);
+#endif
         out->clear();
         FILE *f = std::fopen(path.c_str(), "r");
         if (!f) return false;
@@ -462,7 +505,8 @@ struct Direct {
             int dur = 0, f0 = 0;
             if (std::strncmp(line, "us_", 3) == 0 && std::strchr(line + 3, ' ') == nullptr &&
                 std::sscanf(line + 3, "%15[a-z_]<%d,%d>", sym, &dur, &f0) == 3)
-                out->push_back({sym, int(std::lround(dur * 10.0 / 71.0))});
+                // the l that is sent is DECtalk's ll (usa_phon.tab)
+                out->push_back({std::strcmp(sym, "ll") == 0 ? "l" : sym, int(std::lround(dur * 10.0 / 71.0))});
         }
         std::fclose(f);
         return true;

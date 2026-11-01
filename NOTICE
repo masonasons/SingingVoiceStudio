@@ -8,7 +8,9 @@ build scripts.
 It does not cover the synthesisers, which carry their own licences:
 
     engine/                              VocalWriterC (github.com/masonasons/VocalWriterC)
-    third_party/dectalk/                 DECtalk (github.com/dectalk/dectalk), see its LICENCE
+    third_party/dectalk/                 DECtalk (github.com/dectalk/dectalk), see its LICENCE;
+                                         on Windows compiled into the program,
+                                         with its dictionary
     third_party/ssi263-speech/           the SSI-263 emulation (github.com/tgeczy/ssi263-speech), MIT
     third_party/ms-sam-mike-mary-decomp/ the Microsoft TTS reconstruction
                                          (github.com/KamiKitsune420/ms-sam-mike-mary-decomp), MIT
@@ -64,8 +66,8 @@ does not contain:
     voices/microsoft/    Microsoft Sam, Mike and Mary (Sam.spd, Mike.spd,
                          Mary.spd and their .sdf files). Copyright Microsoft
                          Corporation.
-    voices/dectalk/      DECtalk.dll and dtalk_us.dic, built from
-                         third_party/dectalk.
+    voices/dectalk/      on macOS, DECtalk's library and dtalk_us.dic, built
+                         from third_party/dectalk.
 
 This is an interoperability and preservation project for speech synthesisers
 that current machines no longer run as they were. It is not affiliated with

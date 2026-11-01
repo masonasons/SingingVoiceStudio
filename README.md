@@ -285,15 +285,18 @@ again at once, as it is now.
 
 ## Data you supply
 
-None of the synthesisers' data is in this program. It is looked for beside the
-executable, the folder above it, the source tree, and `%SVS_DATA%` (on macOS
-also the bundle's `Contents/Resources` and the folder the `.app` sits in):
+None of the synthesisers' data is in this program, apart from DECtalk on
+Windows and the SSI-263's phoneme ROM, which are compiled in. It is looked for
+beside the executable, the folder above it, the source tree, and `%SVS_DATA%`
+(on macOS also the bundle's `Contents/Resources` and the folder the `.app`
+sits in):
 
 ```
 assets\                     VocalWriter 2.0's files, laid out as in the
                             VocalWriter repository (VocalWriter.app\...\VocalWriter.rsrc,
                             GMSpeech.rsrc, GMBank.rsrc, EnglishLex)
-voices\dectalk\             DECtalk.dll and dtalk_us.dic (scripts\build_dectalk.ps1 makes them)
+voices\dectalk\             on macOS, or a build with SVS_DECTALK_STATIC off: DECtalk's
+                            library and dtalk_us.dic (scripts\build_dectalk.ps1 makes them)
 voices\microsoft\           Sam.spd, Mike.spd, Mary.spd (any of them). Without them, the
                             installed copies are used: Common Files\SpeechEngines\Microsoft\TTS\1033
                             (the SAPI 5 voice package) or Common Files\Microsoft Shared\Speech\1033
@@ -380,15 +383,25 @@ sh build.sh
 
 That gives `build\SingingVoiceStudio.exe`, the editor, and `build\svs.exe`, the
 same program as a console program. Both are linked statically and need no
-DLLs of their own. DECtalk only builds with Visual Studio, so it is built
-separately and loaded at run time:
+DLLs of their own. DECtalk is compiled into both (cmake/engines/dectalk.cmake):
+the sources, defines and settings of the "Release - ENGLISH_US" build of its
+DLL, compiled with GCC, with its scale retuned as the DLL's is, so it sings as
+the DLL does. Its US English dictionary is compiled in too, and written to the
+settings folder (`%APPDATA%\Singing Voice Studio`) for DECtalk to open. The
+dictionary is taken from `voices\dectalk\dtalk_us.dic` if it is there, which
+Visual Studio builds from DECtalk's word list:
 
 ```
-powershell -File scripts\build_dectalk.ps1
+powershell -File scripts\build_dectalk.ps1 -DictionaryOnly
 ```
 
-Or all of it at once -- DECtalk, the program, every engine's data gathered
-beside it, a check that it sings from there, and a zip:
+and otherwise from DECtalk's sources, an earlier build of the same word list.
+`-DSVS_DECTALK_STATIC=OFF` leaves DECtalk out of the program, to be loaded at
+run time as `voices\dectalk\DECtalk.dll`, which `scripts\build_dectalk.ps1`
+without `-DictionaryOnly` builds beside the dictionary.
+
+Or all of it at once -- DECtalk's dictionary, the program, every engine's data
+gathered beside it, a check that it sings from there, and a zip:
 
 ```
 powershell -ExecutionPolicy Bypass -File scripts\build_all.ps1          (add -Clean to start afresh)

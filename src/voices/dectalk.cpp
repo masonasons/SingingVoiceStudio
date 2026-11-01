@@ -1,14 +1,17 @@
 // dectalk.cpp -- DECtalk's voices, singing.
 //
-// The synthesiser is DECtalk 5 as published in third_party/dectalk, built
-// with Microsoft's compiler into DECtalk.dll (scripts/build_dectalk.ps1) on
-// Windows, and with clang into libtts.dylib (scripts/build_dectalk_mac.sh) on
-// macOS. The rest of the program is built with GCC on Windows, so the DLL is
-// not linked: it is loaded when first needed from voices\dectalk under the
-// data roots (see core/paths.h), or from beside the program (on macOS, from
-// the bundle's Frameworks folder), with the US English dictionary
-// dtalk_us.dic in voices\dectalk. The dictionary is only for reading text,
-// which nothing here does, but DECtalk will not start without it.
+// The synthesiser is DECtalk 5 as published in third_party/dectalk. On
+// Windows it is compiled into the program, as DECtalk.dll's own build
+// configuration compiles it (SVS_DECTALK_STATIC, cmake/engines/dectalk.cmake),
+// and so is its US English dictionary, which is written out to the settings
+// folder for DECtalk to open. Otherwise it is a library of its own, built with
+// Microsoft's compiler into DECtalk.dll (scripts/build_dectalk.ps1) or with
+// clang into libtts.dylib on macOS (scripts/build_dectalk_mac.sh), and loaded
+// when first needed from voices\dectalk under the data roots (see
+// core/paths.h), or from beside the program (on macOS, from the bundle's
+// Frameworks folder), with the dictionary dtalk_us.dic in voices\dectalk. The
+// dictionary is only for reading text, which nothing here does, but DECtalk
+// will not start without it.
 //
 // DECtalk sings the way its own songs are written (the reference guide's
 // "Happy Birthday", samplosf\src\data\birthday.txt): in phoneme mode, one
@@ -151,6 +154,22 @@ typedef UINT (*SpeakFn)(DtHandle, char *, DWORD);
 typedef UINT (*OpenInMemoryFn)(DtHandle, DWORD);
 typedef UINT (*AddBufferFn)(DtHandle, DtBuffer *);
 typedef UINT (*ReturnBufferFn)(DtHandle, DtBuffer **);
+
+#ifdef SVS_DECTALK_STATIC
+}  // namespace
+// DECtalk's entry points, compiled in, and its dictionary (embed.cmake)
+extern "C" {
+UINT TextToSpeechStartupExFonix(DtHandle *, UINT, DWORD, DtCallback, LONG, char *);
+UINT TextToSpeechSpeak(DtHandle, char *, DWORD);
+UINT TextToSpeechSync(DtHandle);
+UINT TextToSpeechOpenInMemory(DtHandle, DWORD);
+UINT TextToSpeechAddBuffer(DtHandle, DtBuffer *);
+UINT TextToSpeechReturnBuffer(DtHandle, DtBuffer **);
+extern const unsigned char svs_dectalk_dictionary[];
+extern const unsigned long svs_dectalk_dictionary_size;
+}
+namespace {
+#endif
 
 const UINT kWaveMapper = UINT(-1);
 const DWORD kDoNotUseAudioDevice = 0x80000000;
@@ -413,11 +432,43 @@ private:
     static constexpr DWORD kBufferBytes = 65536;      //: 3 s of samples each
     static constexpr size_t kMaxQueued = 200;         //: DECtalk's queue holds 256
 
-    // Look for DECtalk and start it. Missing files are looked for again the
-    // next time (they may have been put there since); a failure to start is
-    // not tried again.
-    bool start_locked() {
-        if (tried_) return handle_ != nullptr;
+#ifdef SVS_DECTALK_STATIC
+    // DECtalk is compiled in, and so is its dictionary, which is written out
+    // to the settings folder for DECtalk to open, unless the same file is
+    // there already.
+    bool find_locked(std::string *dic) {
+        folder_ = settings_dir();
+        *dic = join_path(folder_, "dtalk_us.dic");
+        const unsigned char *bytes = svs_dectalk_dictionary;
+        size_t size = svs_dectalk_dictionary_size;
+        std::vector<unsigned char> was;
+        if (!read_file(*dic, &was) || was.size() != size || !std::equal(was.begin(), was.end(), bytes)) {
+            make_dirs(folder_);
+            std::FILE *f = nullptr;
+#ifdef _WIN32
+            f = _wfopen(widen(*dic).c_str(), L"wb");
+#else
+            f = std::fopen(dic->c_str(), "wb");
+#endif
+            bool ok = f && std::fwrite(bytes, 1, size, f) == size;
+            if (f) ok = std::fclose(f) == 0 && ok;
+            if (!ok) {
+                why_ = "DECtalk's dictionary could not be written to " + folder_;
+                return false;
+            }
+        }
+        tried_ = true;
+        startup_ = TextToSpeechStartupExFonix;
+        speak_ = TextToSpeechSpeak;
+        sync_ = TextToSpeechSync;
+        open_ = TextToSpeechOpenInMemory;
+        add_ = TextToSpeechAddBuffer;
+        return_ = TextToSpeechReturnBuffer;
+        return true;
+    }
+#else
+    // DECtalk's library and its dictionary, looked for where they are kept.
+    bool find_locked(std::string *found) {
 #ifdef _WIN32
         const char *lib_name = "DECtalk.dll";
 #elif defined(__APPLE__)
@@ -428,9 +479,9 @@ private:
         // the folder as this platform writes it, for a message (as
         // core/paths.h's data_name writes it, where there is one)
 #ifdef _WIN32
-        const std::string folder = "voices\\dectalk";
+        folder_ = "voices\\dectalk";
 #else
-        const std::string folder = "voices/dectalk";
+        folder_ = "voices/dectalk";
 #endif
         std::string dir = find_data("voices\\dectalk");
         std::string dll = join_path(dir, lib_name);
@@ -449,11 +500,11 @@ private:
             }
         }
         if (!file_exists(dll)) {
-            why_ = std::string("DECtalk itself, ") + lib_name + ", is not in " + folder;
+            why_ = std::string("DECtalk itself, ") + lib_name + ", is not in " + folder_;
             return false;
         }
         if (!file_exists(dic)) {
-            why_ = "DECtalk's dictionary, dtalk_us.dic, is not in " + folder;
+            why_ = "DECtalk's dictionary, dtalk_us.dic, is not in " + folder_;
             return false;
         }
         tried_ = true;
@@ -461,7 +512,7 @@ private:
         // The DLL's own dependencies are looked for beside it.
         dll_ = LoadLibraryExW(widen(dll).c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
         if (!dll_) {
-            why_ = std::string(lib_name) + " in " + folder + " could not be loaded (Windows error " +
+            why_ = std::string(lib_name) + " in " + folder_ + " could not be loaded (Windows error " +
                    std::to_string(GetLastError()) + ")";
             return false;
         }
@@ -473,7 +524,7 @@ private:
         dll_ = dlopen(dll.c_str(), RTLD_NOW | RTLD_LOCAL);
         if (!dll_) {
             const char *e = dlerror();
-            why_ = std::string(lib_name) + " in " + folder + " could not be loaded (" + (e ? e : "dlopen failed") +
+            why_ = std::string(lib_name) + " in " + folder_ + " could not be loaded (" + (e ? e : "dlopen failed") +
                    ")";
             return false;
         }
@@ -486,9 +537,21 @@ private:
         add_ = reinterpret_cast<AddBufferFn>(get("TextToSpeechAddBuffer"));
         return_ = reinterpret_cast<ReturnBufferFn>(get("TextToSpeechReturnBuffer"));
         if (!startup_ || !speak_ || !sync_ || !open_ || !add_ || !return_) {
-            why_ = std::string(lib_name) + " in " + folder + " is not a DECtalk 5 that this program knows";
+            why_ = std::string(lib_name) + " in " + folder_ + " is not a DECtalk 5 that this program knows";
             return false;
         }
+        *found = dic;
+        return true;
+    }
+#endif
+
+    // Look for DECtalk and start it. Missing files are looked for again the
+    // next time (they may have been put there since); a failure to start is
+    // not tried again.
+    bool start_locked() {
+        if (tried_) return handle_ != nullptr;
+        std::string dic;
+        if (!find_locked(&dic)) return false;
 #ifdef _WIN32
         // DECtalk opens the dictionary with the ANSI file functions; the
         // short form of the path is plain ASCII wherever the folder is.
@@ -504,7 +567,7 @@ private:
         adic.push_back('\0');
 #endif
         if (adic.size() >= 500) {
-            why_ = "the path to " + folder + " is too long for DECtalk";
+            why_ = "the path to " + folder_ + " is too long for DECtalk";
             return false;
         }
         DtHandle h = nullptr;
@@ -568,6 +631,8 @@ private:
     bool tried_ = false;
     std::string why_ = "DECtalk has not been started";
     HMODULE dll_ = nullptr;
+    //: where DECtalk was looked for, or its dictionary written, for a message
+    std::string folder_;
     DtHandle handle_ = nullptr;
     StartupFn startup_ = nullptr;
     SpeakFn speak_ = nullptr;

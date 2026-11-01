@@ -7,7 +7,8 @@
 #
 # Needs: pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
 # (wxWidgets is fetched and built from source by CMake, at a pinned master commit.)
-# DECtalk is built separately, with Visual Studio: scripts/build_dectalk.ps1.
+# DECtalk is compiled in; scripts/build_dectalk.ps1 -DictionaryOnly builds its
+# dictionary from its word list with Visual Studio first, if wanted.
 set -e
 cd "$(dirname "$0")"
 MINGW=${MINGW:-/c/Users/mew/scoop/apps/msys2/current/mingw64}
