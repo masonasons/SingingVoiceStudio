@@ -122,6 +122,8 @@ private:
     void on_track_edit(wxCommandEvent &);
     void on_track_remove(wxCommandEvent &);
     void move_tracks(int delta);
+    void select_all_tracks();
+    void transpose_tracks(int by);
     void on_panes(wxCommandEvent &);
     void on_app_activate(wxActivateEvent &evt);
     void come_back();

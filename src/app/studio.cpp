@@ -45,6 +45,7 @@ enum {
     ID_TRACK_UP, ID_TRACK_DOWN, ID_PREVIEW_TIMER, ID_RECOVERY_TIMER, ID_ADD_CONTROLLER, ID_CLOSE_RESTS,
     ID_REMOVE_VELOCITIES, ID_APPEND, ID_OWN_PATH, ID_PLAIN_HELD, ID_FOLLOW, ID_FOLLOW_TIMER, ID_EXPORT_TIMER,
     ID_EXPORT_MIDI, ID_ADD_WORD_EXISTING, ID_OCTAVE_INSTRUMENTS, ID_ADD_TEXT, ID_REMOVE_VOLUMES,
+    ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN,
 };
 
 //: A beat is a quarter note, so a sixteenth is a quarter of a beat: the step
@@ -370,6 +371,16 @@ void Studio::build_menu() {
     track->AppendSeparator();
     track->Append(ID_TRACK_UP, K("Move track &up (Ctrl+Up on a track)"), "Put this part earlier in the list");
     track->Append(ID_TRACK_DOWN, K("Move track &down (Ctrl+Down on a track)"), "Put this part later in the list");
+    track->AppendSeparator();
+    // handled by the tracks list, as the notes list handles a note's
+    track->Append(ID_TRACK_TRANSPOSE_UP, K("Transpose u&p (Alt+Up on a track)"),
+                  "Every note of the selected tracks up one semitone");
+    track->Append(ID_TRACK_TRANSPOSE_DOWN, K("Transpose do&wn (Alt+Down on a track)"),
+                  "Every note of the selected tracks down one semitone");
+    track->Append(ID_TRACK_OCTAVE_UP, K("Up an &octave (Alt+Shift+Up on a track)"),
+                  "Every note of the selected tracks up twelve semitones");
+    track->Append(ID_TRACK_OCTAVE_DOWN, K("Down an octa&ve (Alt+Shift+Down on a track)"),
+                  "Every note of the selected tracks down twelve semitones");
 
     wxMenu *play = new wxMenu();
     // Space is handled by the lists rather than registered as an
@@ -500,6 +511,10 @@ void Studio::build_menu() {
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { toggle_track(true); }, ID_TRACK_SOLO);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { move_tracks(-1); }, ID_TRACK_UP);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { move_tracks(1); }, ID_TRACK_DOWN);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(kSemitone); }, ID_TRACK_TRANSPOSE_UP);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(-kSemitone); }, ID_TRACK_TRANSPOSE_DOWN);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(kOctave); }, ID_TRACK_OCTAVE_UP);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(-kOctave); }, ID_TRACK_OCTAVE_DOWN);
     on(ID_PANES, &Studio::on_panes);
     on(ID_PLAY, &Studio::on_play);
     on(ID_PLAY_PAUSE, &Studio::on_play_stop);
@@ -788,6 +803,9 @@ void Studio::on_keys(wxCommandEvent &) {
         "M on a track  mute it, S  solo it",
         "Delete on a track  remove it, or every selected track: Shift with the arrow keys selects more than one",
         "Ctrl+Up or Ctrl+Down on a track  reorder the parts",
+        "Alt+Up or Alt+Down on a track  transpose every note of the selected tracks a semitone, Alt+Shift+Up or "
+        "Alt+Shift+Down an octave",
+        "Ctrl+A on a track  select every track",
         "Ctrl+W  add a word after the selected note, or at the end",
         "Ctrl+Shift+W  add a word to the notes already there, from the selected one on",
         "Ctrl+Shift+X  add a text, words divided by spaces, to the notes already there, from the selected one on",
@@ -1012,8 +1030,12 @@ void Studio::on_track_key(wxKeyEvent &evt) {
     int code = evt.GetKeyCode();
     bool plain = !(evt.ControlDown() || evt.AltDown() || evt.ShiftDown());
     wxCommandEvent e;
-    if (evt.ControlDown() && (code == WXK_UP || code == WXK_DOWN))
+    if (evt.AltDown() && !evt.ControlDown() && (code == WXK_UP || code == WXK_DOWN))
+        transpose_tracks((code == WXK_UP ? 1 : -1) * (evt.ShiftDown() ? kOctave : kSemitone));
+    else if (evt.ControlDown() && (code == WXK_UP || code == WXK_DOWN))
         move_tracks(code == WXK_UP ? -1 : 1);
+    else if (evt.ControlDown() && !evt.ShiftDown() && !evt.AltDown() && code == 'A')
+        select_all_tracks();
     else if (code == WXK_SPACE && plain)
         on_play_stop(e);
     else if (code == 'S' && plain)
@@ -1026,6 +1048,61 @@ void Studio::on_track_key(wxKeyEvent &evt) {
         on_track_edit(e);              // not skipped: one dialog, not two
     else
         evt.Skip();
+}
+
+//: Ctrl+A on a track: every track, to transpose or remove them together.
+void Studio::select_all_tracks() {
+    switching_ = true;              // the notes list stays on its track
+    for (int i = 0; i < int(song_.tracks.size()); ++i) tracks_list_->SelectRow(i);
+    switching_ = false;
+    say(W("all " + plural(song_.tracks.size(), "track") + " selected"));
+}
+
+//: Alt with Up and Down on a track, a semitone, and with Shift an octave:
+//: every note of the selected tracks, or of the one the keyboard is on. A
+//: rest's lead-in pitch goes with them; the drum kit's notes are drums, and
+//: stay as they are.
+void Studio::transpose_tracks(int by) {
+    undoable("transpose tracks", [&] {
+        std::vector<int> rows;
+        for (int r : tracks_list_->SelectedRows())
+            if (r >= 0 && r < int(song_.tracks.size())) rows.push_back(r);
+        if (rows.empty()) rows = {track_at()};
+        std::vector<std::string> moved;
+        size_t drums = 0;
+        for (int r : rows) {
+            Track &t = song_.tracks[size_t(r)];
+            int voice = track_voice_of(t);
+            bool any = false;
+            for (Note &n : t.notes) {
+                if (n.controller && n.voice_id) voice = *n.voice_id;
+                if (voice == kGmDrums) {
+                    drums += !n.controller && !n.is_rest();
+                    continue;
+                }
+                if (!n.controller) {
+                    any = any || !n.is_rest();
+                    n.pitch = std::max(0, std::min(127, n.pitch + by));
+                }
+                auto lead = n.controls.find("lead_pitch");
+                if (lead != n.controls.end())
+                    for (auto &p : lead->second) p.second = std::max(0.0, std::min(127.0, p.second + by));
+            }
+            if (any) moved.push_back(t.name);
+        }
+        std::string how = std::string(by > 0 ? "up" : "down") + (std::abs(by) == kOctave ? " an octave" : " a semitone");
+        if (moved.empty()) {
+            say(drums ? "the drum kit's notes are drums, so they stay as they are"
+                      : rows.size() == 1 ? "there are no notes in this track to transpose"
+                                         : "there are no notes in these tracks to transpose");
+            return;
+        }
+        touch();
+        if (std::find(rows.begin(), rows.end(), current_) != rows.end()) sync(std::max(0, selection()));
+        std::string message = (moved.size() == 1 ? moved[0] : plural(moved.size(), "track")) + " " + how;
+        if (drums) message += ", the drum kit's notes left as they are";
+        announce_note(W(message), tracks_list_, track_at());
+    });
 }
 
 //: The track the keyboard is on, when several are selected; else the
