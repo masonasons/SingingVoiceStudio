@@ -8,11 +8,79 @@ build scripts.
 It does not cover the synthesisers, which carry their own licences:
 
     engine/                              VocalWriterC (github.com/masonasons/VocalWriterC)
-    third_party/dectalk/                 DECtalk (github.com/dectalk/dectalk), see its LICENCE
+    third_party/dectalk/                 DECtalk (github.com/dectalk/dectalk), see its LICENCE;
+                                         on Windows compiled into the program,
+                                         with its dictionary
     third_party/ssi263-speech/           the SSI-263 emulation (github.com/tgeczy/ssi263-speech), MIT
     third_party/ms-sam-mike-mary-decomp/ the Microsoft TTS reconstruction
                                          (github.com/KamiKitsune420/ms-sam-mike-mary-decomp), MIT
     third_party/nlohmann/                nlohmann/json, MIT
+
+The builds also link in libraries fetched while they build, each under its
+own licence:
+
+    libFLAC (github.com/xiph/flac)       Copyright (C) 2000-2009 Josh Coalson,
+                                         2011-2023 Xiph.Org Foundation; BSD
+                                         3-clause, see its COPYING.Xiph
+    libogg (github.com/xiph/ogg)         Copyright (c) 2002 Xiph.org Foundation;
+                                         BSD 3-clause, see its COPYING
+    libvorbis (github.com/xiph/vorbis)   Copyright (c) 2002-2020 Xiph.org
+                                         Foundation; BSD 3-clause, see its COPYING
+
+All three are distributed on these terms, with the copyright lines above:
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+    - Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+    - Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+    - Neither the name of the Xiph.Org Foundation nor the names of its
+    contributors may be used to endorse or promote products derived from
+    this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+They also compile in TinySoundFont, which plays the SoundFonts:
+
+    TinySoundFont                        Copyright (C) 2017-2023 Bernhard
+    (github.com/schellingb/TinySoundFont) Schelling (based on SFZero, Copyright
+                                         (C) 2012 Steve Folta,
+                                         github.com/stevefolta/SFZero); MIT
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to
+    permit persons to whom the Software is furnished to do so, subject to
+    the following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+    CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Nor does it cover the data the release builds carry, which this repository
 does not contain:
@@ -24,8 +92,8 @@ does not contain:
     voices/microsoft/    Microsoft Sam, Mike and Mary (Sam.spd, Mike.spd,
                          Mary.spd and their .sdf files). Copyright Microsoft
                          Corporation.
-    voices/dectalk/      DECtalk.dll and dtalk_us.dic, built from
-                         third_party/dectalk.
+    voices/dectalk/      on macOS, DECtalk's library and dtalk_us.dic, built
+                         from third_party/dectalk.
 
 This is an interoperability and preservation project for speech synthesisers
 that current machines no longer run as they were. It is not affiliated with

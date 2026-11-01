@@ -5,6 +5,7 @@
 #include <deque>
 
 #include <wx/dirdlg.h>
+#include <wx/filedlg.h>
 #include <wx/tokenzr.h>
 
 #include "app/studio.h"
@@ -57,6 +58,28 @@ bool check_range(wxDialog *d, wxTextCtrl *field, const wxString &name, double lo
     wxString said = !number ? range + "; type a number in that range."
                             : range + ", so " + t + " is too " + (v < lo ? "low." : "high.");
     wxMessageBox(said, d->GetTitle(), wxOK | wxICON_ERROR, d);
+    field->SetFocus();
+    field->SelectAll();
+    return false;
+}
+
+//: The voices the engine and voice boxes offer: those that can sing here,
+//: and `keep`, the one in use, so that it can still be seen and kept.
+std::vector<VoiceListing> offered(const std::vector<VoiceListing> &all, int keep) {
+    std::vector<VoiceListing> out;
+    for (const VoiceListing &v : all)
+        if (v.available || v.id == keep) out.push_back(v);
+    return out;
+}
+
+//: Whether `field` holds a time signature, or is blank; if not, as check_range.
+bool check_sig(wxDialog *d, wxTextCtrl *field) {
+    wxString t = field->GetValue();
+    t.Trim(true).Trim(false);
+    if (t.empty() || parse_sig(U(t), {0, 0}).first) return true;
+    wxMessageBox("A time signature is the beats to the bar over the note that has the beat, as 3/4 or 6/8: from 1 "
+                 "to 32 over 1, 2, 4, 8, 16 or 32.",
+                 d->GetTitle(), wxOK | wxICON_ERROR, d);
     field->SetFocus();
     field->SelectAll();
     return false;
@@ -148,10 +171,16 @@ AddWordDialog::AddWordDialog(wxWindow *parent, Studio *studio, int pitch, double
     build(beats);
 }
 
-AddWordDialog::AddWordDialog(wxWindow *parent, Studio *studio, std::vector<Note> existing, bool text)
+AddWordDialog::AddWordDialog(wxWindow *parent, Studio *studio, std::vector<Note> existing, bool text,
+                             std::vector<int> spots)
     : wxDialog(parent, wxID_ANY, text ? "Add text" : "Add word to existing note(s)"), studio_(studio),
-      pitch_(kDefaultPitch), existing_(std::move(existing)), text_(text) {
+      pitch_(kDefaultPitch), existing_(std::move(existing)), spots_(std::move(spots)), text_(text) {
     build(kDefaultBeats);
+}
+
+//: A preview still playing stops with the dialog.
+AddWordDialog::~AddWordDialog() {
+    if (playing_) studio_->stop_playing();
 }
 
 void AddWordDialog::build(double beats) {
@@ -181,10 +210,13 @@ void AddWordDialog::build(double beats) {
     wxButton *look = new wxButton(this, wxID_ANY, "&Look up");
     look->Bind(wxEVT_BUTTON, &AddWordDialog::on_look, this);
     row->Add(look, 0, wxALL, 3);
-    hear_ = new wxButton(this, wxID_ANY, "&Preview");
-    hear_->Bind(wxEVT_BUTTON, &AddWordDialog::on_preview, this);
-    hear_->Disable();
-    row->Add(hear_, 0, wxALL, 3);
+    // Add text's Preview is after the list instead
+    if (!text_) {
+        hear_ = new wxButton(this, wxID_ANY, "&Preview");
+        hear_->Bind(wxEVT_BUTTON, &AddWordDialog::on_preview, this);
+        hear_->Disable();
+        row->Add(hear_, 0, wxALL, 3);
+    }
     outer->Add(row, 0);
 
     count_ = new wxSpinCtrl(this, wxID_ANY, "", wxDefaultPosition, wxSize(80, -1), wxSP_ARROW_KEYS, 1, 1, 1);
@@ -221,6 +253,18 @@ void AddWordDialog::build(double beats) {
     });
     list_->OnKey([this](wxKeyEvent &e) { on_key(e); });
     caption(this, outer, text_ ? "Words of this text" : "Notes for this word", list_);
+
+    // the track with the text on it, from the word selected; Stop while it plays
+    if (text_) {
+        play_ = new wxButton(this, wxID_ANY, "&Preview");
+        play_->Bind(wxEVT_BUTTON, &AddWordDialog::on_play, this);
+        play_->Disable();
+        outer->Add(play_, 0, wxALL, 6);
+        play_timer_.SetOwner(this);
+        Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
+            if (playing_ && !studio_->playing()) show_stopped();
+        }, play_timer_.GetId());
+    }
 
     outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
     ok_ = wxDynamicCast(FindWindow(wxID_OK), wxButton);
@@ -352,7 +396,7 @@ void AddWordDialog::looked_text(std::vector<TextWord> words, std::map<std::strin
     count_->SetRange(1, most);
     count_->SetValue(std::min(want, most));
     build_rows();
-    hear_->Enable();
+    play_->Enable();
     if (ok_) ok_->Enable();
     show_count();
     std::string said = std::to_string(words_.size()) + (words_.size() == 1 ? " word" : " words") + " on " +
@@ -364,6 +408,7 @@ void AddWordDialog::looked_text(std::vector<TextWord> words, std::map<std::strin
         for (size_t i = 0; i < missing.size(); ++i) said += (i ? ", " : " ") + missing[i];
     }
     studio_->say(W(said));
+    if (playing_) start_play();
     count_->SetFocus();
 }
 
@@ -386,6 +431,8 @@ void AddWordDialog::edit_word(int i) {
     studio_->say(W(w.word + ", " + (w.phonemes.empty() ? std::string(kDefaultPhoneme) : spaced(w.phonemes)) +
                    ", on " + std::to_string(w.notes) + (w.notes == 1 ? " note" : " notes") + "; Notes to use " +
                    std::to_string(count_->GetValue())));
+    // a preview going on is heard again as it is now
+    if (playing_) start_play();
 }
 
 //: Notes to use put in the dialog, the first time something is looked up.
@@ -465,16 +512,19 @@ void AddWordDialog::refresh_row(int i) {
 
 void AddWordDialog::on_count(wxSpinEvent &) {
     if (!ready()) return;
-    build_rows();
     if (text_) {
+        // the word selected stays so, for a preview going on
+        build_rows(std::max(0, list_->FirstSelected()));
         // a whole text is too long to hear: where it gets to instead
         std::string last;
         for (const Note &n : rows_)
             if (!n.word.empty()) last = n.word;
         studio_->say(W(std::to_string(rows_.size()) + (rows_.size() == 1 ? " note" : " notes") + ", as far as " +
                        last));
+        if (playing_) start_play();
         return;
     }
+    build_rows();
     std::string all;
     for (const Note &n : rows_) all += (all.empty() ? "" : ", ") + n.text();
     studio_->say(W(std::to_string(rows_.size()) + " note" + (rows_.size() == 1 ? "" : "s") + ": " + all));
@@ -549,6 +599,64 @@ void AddWordDialog::on_preview(wxCommandEvent &) {
     studio_->preview(rows_, [alive, b]() {
         if (auto a = alive.lock(); a && *a) b->Enable();
     });
+}
+
+void AddWordDialog::on_play(wxCommandEvent &) {
+    if (!playing_) {
+        start_play();
+        return;
+    }
+    stop_play();
+    studio_->say("stopped");
+}
+
+//: The track alone with the text on it, from the first note of the word
+//: selected, as the words are now.
+void AddWordDialog::start_play() {
+    int i = std::max(0, list_->FirstSelected());
+    if (i >= int(words_.size()) || rows_.empty()) {
+        stop_play();
+        return;
+    }
+    // the notes the words before it take
+    int first = 0;
+    for (int k = 0; k < i && k < int(shares_.size()); ++k) first += shares_[size_t(k)];
+    if (size_t(i) >= shares_.size() || shares_[size_t(i)] <= 0 || first >= int(spots_.size())) {
+        stop_play();
+        studio_->say(W(words_[size_t(i)].word + " has no notes: the notes ran out before it"));
+        return;
+    }
+    int want = ++play_wanted_;
+    play_timer_.Stop();
+    playing_ = true;
+    play_->SetLabel("&Stop");
+    studio_->say(W("previewing from " + words_[size_t(i)].word));
+    auto alive = token();
+    studio_->preview_track(
+        spots_, rows_, spots_[size_t(first)],
+        [this, alive, want] {
+            auto a = alive.lock();
+            return a && *a && playing_ && play_wanted_ == want;
+        },
+        [this, alive, want](bool started) {
+            auto a = alive.lock();
+            if (!a || !*a || play_wanted_ != want) return;
+            if (started) play_timer_.Start(100);
+            else show_stopped();
+        });
+}
+
+//: Stop the preview, and any render on its way.
+void AddWordDialog::stop_play() {
+    ++play_wanted_;
+    if (playing_) studio_->stop_playing();
+    show_stopped();
+}
+
+void AddWordDialog::show_stopped() {
+    play_timer_.Stop();
+    playing_ = false;
+    if (play_) play_->SetLabel("&Preview");
 }
 
 // -- the two curves -------------------------------------------------------------------
@@ -864,7 +972,7 @@ bool control_reaches(const std::string &key, int voice) {
     // the bend range and the rest's pitch are VocalWriter's sequencer's
     if (is_vocalwriter_voice(voice))
         return key != "sustain" && (vocalwriter_own_path() || (key != "bend_range" && key != "lead_pitch"));
-    if (is_gm_voice(voice)) return key == "volume" || key == "sustain" || key == "bend_range" || key == "detune";
+    if (is_instrument(voice)) return key == "volume" || key == "sustain" || key == "bend_range" || key == "detune";
     return false;
 }
 
@@ -883,7 +991,7 @@ NoteDialog::NoteDialog(wxWindow *parent, Studio *studio, const Note *note, const
       studio_(studio),
       note_(note ? *note : seed) {
     int voice = studio_->current_voice();
-    played_ = is_gm_voice(voice);
+    played_ = is_instrument(voice);
     wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
     phon_ = new wxTextCtrl(this, wxID_ANY, W(note_.text()), wxDefaultPosition, wxSize(300, -1));
     labelled(this, outer, "Phonemes", phon_, 1,
@@ -912,13 +1020,13 @@ NoteDialog::NoteDialog(wxWindow *parent, Studio *studio, const Note *note, const
     velocity_ = new wxTextCtrl(this, wxID_ANY, note_.velocity ? W(std::to_string(note_.velocity)) : wxString(),
                                wxDefaultPosition, wxSize(90, -1));
     labelled(this, outer, "Velocity", velocity_, 0,
-             "1 to 127, blank for the track's; VocalWriter's voices and the GM Soundbank only");
+             "1 to 127, blank for the track's; VocalWriter's voices and the instruments only");
     enable_labelled(velocity_, vocalwriter);
     // how long an instrument holds it, if not its beats
     hold_ = new wxTextCtrl(this, wxID_ANY, note_.hold > 0 ? W(fmt_g(note_.hold)) : wxString(), wxDefaultPosition,
                            wxSize(90, -1));
     labelled(this, outer, "Sounds for", hold_, 0,
-             "beats an instrument holds it, blank for its beats; the GM Soundbank's instruments only");
+             "beats an instrument holds it, blank for its beats; the instruments only");
     enable_labelled(hold_, played_);
     auto ends = bend_ends(note_.bend);
     bend_start_ = new wxTextCtrl(this, wxID_ANY, W(bend_text(ends.first)), wxDefaultPosition, wxSize(90, -1));
@@ -1064,14 +1172,14 @@ wxSpinCtrl *spin(wxWindow *parent, int lo, int hi, int value, int width) {
 }
 
 //: the song's end as bar and beat, "12 1"; empty when it has none
-std::string end_text(double end, Sig sig) {
+std::string end_text(double end, const Meter &meter) {
     if (end <= 0) return "";
-    auto bb = bar_and_beat(end, sig);
+    auto bb = meter.bar_and_beat(end);
     return std::to_string(bb.first) + " " + fmt_g(std::nearbyint(bb.second * 1000) / 1000);
 }
 
 //: "12 1", "12:1" or "12" back to beats from the start; 0 for empty
-double parse_end(const wxString &text, Sig sig) {
+double parse_end(const wxString &text, const Meter &meter) {
     wxString t = text;
     t.Replace(":", " ");
     t.Trim(true).Trim(false);
@@ -1082,7 +1190,7 @@ double parse_end(const wxString &text, Sig sig) {
     rest.Trim(false);
     if (!rest.empty() && !read_number(rest, &beat)) beat = 1;
     beat = std::max(1.0, beat);
-    return (std::floor(bar) - 1) * bar_beats(sig) + (beat - 1) * 4.0 / std::max(sig.second, 1);
+    return meter.position(int(std::floor(bar)), beat);
 }
 }  // namespace
 
@@ -1151,6 +1259,134 @@ std::string PantheraDialog::folder() const {
     t.Trim(true).Trim(false);
     return U(t);
 }
+
+SoundbankDialog::SoundbankDialog(wxWindow *parent, const std::vector<SoundFontFile> &fonts,
+                                 const std::string &default_bank)
+    : wxDialog(parent, wxID_ANY, "Soundbank manager"), fonts_(fonts), default_(default_bank) {
+    for (const SoundFontFile &f : fonts_) infos_.push_back(read_soundfont(f.path, f.slot));
+    wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+    list_ = new ReportList(this, wxLC_REPORT | wxLC_SINGLE_SEL, wxSize(520, 180));
+    list_->InsertColumn(0, "SoundFont", wxLIST_FORMAT_LEFT, 150);
+    list_->InsertColumn(1, "Sounds", wxLIST_FORMAT_LEFT, 90);
+    list_->InsertColumn(2, "Voice numbers", wxLIST_FORMAT_LEFT, 100);
+    list_->InsertColumn(3, "File", wxLIST_FORMAT_LEFT, 170);
+    list_->OnSelected([this] { show_remove(); });
+    list_->OnKey([this](wxKeyEvent &e) {
+        if (e.GetKeyCode() == WXK_DELETE && !e.HasAnyModifiers() && list_->FirstSelected() >= 0) {
+            wxCommandEvent c;
+            on_remove(c);
+            return;
+        }
+        e.Skip();
+    });
+    caption(this, outer, "Loaded SoundFonts", list_, 1);
+    // Remove comes before Load, and only while there is something to remove
+    remove_ = new wxButton(this, wxID_ANY, "&Remove");
+    remove_->Bind(wxEVT_BUTTON, &SoundbankDialog::on_remove, this);
+    outer->Add(remove_, 0, wxALL, 6);
+    load_ = new wxButton(this, wxID_ANY, "&Load soundfont...");
+    load_->Bind(wxEVT_BUTTON, &SoundbankDialog::on_load, this);
+    outer->Add(load_, 0, wxALL, 6);
+    bank_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(300, -1));
+    bank_->Bind(wxEVT_CHOICE, [this](wxCommandEvent &) {
+        int i = bank_->GetSelection();
+        default_ = i > 0 && size_t(i) <= fonts_.size() ? fonts_[size_t(i - 1)].path : std::string();
+    });
+    labelled(this, outer, "&Default soundbank", bank_, 0,
+             "plays the parts of an imported MIDI file or VocalWriter song that are not sung");
+    outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
+    fill(fonts_.empty() ? -1 : 0);
+    SetSizerAndFit(outer);
+    if (fonts_.empty()) load_->SetFocus();
+    else list_->SetFocus();
+}
+
+//: The list and the default soundbank's choices, from fonts_, with the row
+//: `select` selected.
+void SoundbankDialog::fill(int select) {
+    list_->DeleteAllItems();
+    for (size_t i = 0; i < infos_.size(); ++i) {
+        const SoundFontInfo &f = infos_[i];
+        list_->InsertItem(long(i), W(f.name));
+        if (f.error.empty()) {
+            std::string sounds = std::to_string(f.presets.size());
+            if (f.total > f.presets.size()) sounds += " of " + std::to_string(f.total);
+            list_->SetItem(long(i), 1, W(sounds));
+            int base = soundfont_base(f.slot);
+            list_->SetItem(long(i), 2, W(std::to_string(base) + " - " + std::to_string(base + int(f.presets.size()) - 1)));
+        } else {
+            list_->SetItem(long(i), 1, "none");
+            list_->SetItem(long(i), 2, W("cannot be read: " + f.error));
+        }
+        list_->SetItem(long(i), 3, W(f.path));
+    }
+    if (select >= 0 && select < list_->GetItemCount()) {
+        list_->SelectRow(select);
+        list_->FocusRow(select);
+    }
+    bank_->Clear();
+    bank_->Append("GM Soundbank (built-in)");
+    int chosen = 0;
+    for (size_t i = 0; i < infos_.size(); ++i) {
+        bank_->Append(W(infos_[i].name));
+        if (fonts_[i].path == default_) chosen = int(i) + 1;
+    }
+    if (chosen == 0) default_.clear();
+    bank_->SetSelection(chosen);
+    show_remove();
+    list_->Refresh();
+}
+
+void SoundbankDialog::show_remove() {
+    bool any = list_->FirstSelected() >= 0;
+    if (remove_->IsShown() == any) return;
+    remove_->Show(any);
+    Layout();
+}
+
+void SoundbankDialog::on_load(wxCommandEvent &) {
+    wxFileDialog pick(this, "Load soundfont", "", "", "SoundFonts (*.sf2)|*.sf2|All files (*.*)|*.*",
+                      wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (pick.ShowModal() != wxID_OK) return;
+    std::string path = U(pick.GetPath());
+    for (size_t i = 0; i < fonts_.size(); ++i)
+        if (fonts_[i].path == path) {
+            wxMessageBox(W(base_name(path) + " is loaded already."), "Load soundfont", wxOK | wxICON_INFORMATION, this);
+            fill(int(i));
+            list_->SetFocus();
+            return;
+        }
+    // the first slot no other SoundFont has, so the numbers of the others stay
+    int slot = 0;
+    for (bool taken = true; taken; ++slot) {
+        taken = false;
+        for (const SoundFontFile &f : fonts_) taken = taken || f.slot == slot;
+        if (!taken) break;
+    }
+    SoundFontInfo info = read_soundfont(path, slot);
+    if (!info.error.empty()) {
+        wxMessageBox(W(base_name(path) + " cannot be loaded: " + info.error + "."), "Load soundfont",
+                     wxOK | wxICON_ERROR, this);
+        return;
+    }
+    fonts_.push_back({path, slot});
+    infos_.push_back(info);
+    fill(int(fonts_.size()) - 1);
+    list_->SetFocus();
+}
+
+void SoundbankDialog::on_remove(wxCommandEvent &) {
+    int i = list_->FirstSelected();
+    if (i < 0 || size_t(i) >= fonts_.size()) return;
+    if (fonts_[size_t(i)].path == default_) default_.clear();
+    fonts_.erase(fonts_.begin() + i);
+    infos_.erase(infos_.begin() + i);
+    fill(std::min(i, int(fonts_.size()) - 1));
+    if (fonts_.empty()) load_->SetFocus();
+    else list_->SetFocus();
+}
+
+std::string SoundbankDialog::default_soundbank() const { return default_; }
 
 ImportPartsDialog::ImportPartsDialog(wxWindow *parent, const wxArrayString &parts)
     : wxDialog(parent, wxID_ANY, "Import MIDI") {
@@ -1221,15 +1457,12 @@ std::vector<int> ImportPartsDialog::chosen() const {
     return out;
 }
 
-LyricTrackDialog::LyricTrackDialog(wxWindow *parent, const wxArrayString &parts, bool lyrics)
+LyricTrackDialog::LyricTrackDialog(wxWindow *parent, const wxArrayString &parts)
     : wxDialog(parent, wxID_ANY, "Import MIDI") {
     wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
-    wxStaticText *about = new wxStaticText(
-        this, wxID_ANY,
-        lyrics ? wxString("The lyrics in this file could belong to any of these tracks. Which track are they "
-                          "sung on? That track is the one that sings.")
-               : W(std::string("This file has no lyrics. Which track is sung? It sings ") + kDefaultPhoneme +
-                   " on every note until words are put on it, and the others are played by the GM Soundbank."));
+    wxStaticText *about = new wxStaticText(this, wxID_ANY,
+                                           "The lyrics in this file could belong to any of these tracks. Which "
+                                           "track are they sung on? That track is the one that sings.");
     about->Wrap(380);
     outer->Add(about, 0, wxALL, 8);
     choice_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(300, -1), parts);
@@ -1241,14 +1474,58 @@ LyricTrackDialog::LyricTrackDialog(wxWindow *parent, const wxArrayString &parts,
     choice_->SetFocus();
 }
 
+SungPartsDialog::SungPartsDialog(wxWindow *parent, const wxArrayString &parts)
+    : wxDialog(parent, wxID_ANY, "Import MIDI") {
+    wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+    wxStaticText *about = new wxStaticText(
+        this, wxID_ANY,
+        W(std::string("This file has no lyrics. Which tracks are sung? Space ticks or unticks a track. Each one "
+                      "ticked sings ") +
+          kDefaultPhoneme + " on every note until words are put on it; the others, and every track if none is "
+                            "ticked, are played by the default soundbank."));
+    about->Wrap(380);
+    outer->Add(about, 0, wxALL, 8);
+    list_ = new ReportList(this, wxLC_REPORT | wxLC_SINGLE_SEL, wxSize(380, 220));
+    list_->EnableChecks();
+    list_->InsertColumn(0, "Part", wxLIST_FORMAT_LEFT, 350);
+    for (size_t i = 0; i < parts.size(); ++i) list_->InsertItem(long(i), parts[i]);
+    // Enter is OK, as in ImportPartsDialog: Windows gives Space, the tick,
+    // to the list's activation too
+    Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent &evt) {
+        int code = evt.GetKeyCode();
+        wxWindow *focus = wxWindow::FindFocus();
+        bool in_list = focus && (focus == list_ || list_->IsDescendant(focus));
+        if (!in_list || evt.HasAnyModifiers() || (code != WXK_RETURN && code != WXK_NUMPAD_ENTER)) {
+            evt.Skip();
+            return;
+        }
+        EndModal(wxID_OK);
+    });
+    caption(this, outer, "Sung tracks", list_, 1);
+    outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
+    SetSizerAndFit(outer);
+    if (!parts.empty()) {
+        list_->SelectRow(0);
+        list_->FocusRow(0);
+    }
+    list_->SetFocus();
+}
+
+std::vector<int> SungPartsDialog::chosen() const {
+    std::vector<int> out;
+    for (int i = 0; i < list_->GetItemCount(); ++i)
+        if (list_->IsChecked(i)) out.push_back(i);
+    return out;
+}
+
 SongSettingsDialog::SongSettingsDialog(wxWindow *parent, const Song &song, bool own_time)
     : wxDialog(parent, wxID_ANY, "Song settings"), was_sig_(song.sig), was_end_(song.end),
-      end_shown_(W(end_text(song.end, song.sig))) {
+      end_shown_(W(end_text(song.end, song.meter()))) {
     wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
     tempo_ = spin(this, int(kMinBpm), int(kMaxBpm), int(song.bpm), 80);
     labelled(this, outer, "Tempo", tempo_, 0, "beats per minute at the start; a controller changes it");
     sig_ = new wxTextCtrl(this, wxID_ANY, W(format_sig(song.sig)), wxDefaultPosition, wxSize(60, -1));
-    labelled(this, outer, "Time signature", sig_, 0, "as 4/4; it sets where the bars fall");
+    labelled(this, outer, "Time signature", sig_, 0, "as 4/4, where the bars fall from the start; a controller changes it");
     end_ = new wxTextCtrl(this, wxID_ANY, end_shown_, wxDefaultPosition, wxSize(80, -1));
     labelled(this, outer, "Song end", end_, 0,
              "bar and beat, as 12 1, where an export stops; empty is a beat after the last note");
@@ -1294,7 +1571,7 @@ void SongSettingsDialog::apply(Song &song) const {
     song.sig = parse_sig(U(sig_->GetValue()), was_sig_);
     // left as shown, it keeps the end it had, which may lie between the
     // thousandths of a beat it is shown in
-    song.end = end_->GetValue() == end_shown_ ? was_end_ : parse_end(end_->GetValue(), song.sig);
+    song.end = end_->GetValue() == end_shown_ ? was_end_ : parse_end(end_->GetValue(), song.meter());
     song.consonants = consonants_->GetValue() / 100.0;
     for (const auto &vc : voice_ctrls_) song.voice.*(vc.first->field) = vc.second->GetValue();
     song.voice = clean_voice(song.voice);
@@ -1312,12 +1589,15 @@ ControllerDialog::ControllerDialog(wxWindow *parent, Studio *studio, const Note 
     wxArrayString kinds;
     kinds.Add("Voice change");
     kinds.Add("Tempo change");
+    kinds.Add("Time signature change");
     kinds.Add("Pan change");
     kind_ = new wxChoice(this, wxID_ANY, wxDefaultPosition, wxSize(220, -1), kinds);
     labelled(this, outer_, "Controller", kind_, 0, "what it changes from here on");
 
     // the voice as a track's is chosen: the engine, then its voice
     int start = controller.voice_id ? *controller.voice_id : voice_before;
+    // an engine or voice that cannot sing here is left out
+    voices_ = offered(voices_, start);
     wxArrayString engines;
     int engine = 0;
     for (const VoiceListing &v : voices_) {
@@ -1345,6 +1625,14 @@ ControllerDialog::ControllerDialog(wxWindow *parent, Studio *studio, const Note 
              "beats per minute from here on, 5 to 500");
     outer_->Add(tempo_group, 0, wxEXPAND);
     groups_.push_back(tempo_group);
+
+    wxBoxSizer *sig_group = new wxBoxSizer(wxVERTICAL);
+    sig_ = new wxTextCtrl(this, wxID_ANY, controller.sig ? W(format_sig(*controller.sig)) : wxString(),
+                          wxDefaultPosition, wxSize(80, -1));
+    labelled(this, sig_group, "Time signature change (applies to the entire song)", sig_, 0,
+             "as 3/4 or 6/8, from here on; a new bar begins here");
+    outer_->Add(sig_group, 0, wxEXPAND);
+    groups_.push_back(sig_group);
 
     wxBoxSizer *pan_group = new wxBoxSizer(wxVERTICAL);
     pan_ = new wxTextCtrl(this, wxID_ANY, controller.pan ? W(std::to_string(*controller.pan)) : wxString(),
@@ -1379,10 +1667,11 @@ ControllerDialog::ControllerDialog(wxWindow *parent, Studio *studio, const Note 
         kind_->Append(k.label);
     }
     // an existing controller shows what it changes
-    int kind = controller.voice_id ? 0 : controller.tempo > 0 ? 1 : controller.pan ? 2 : 0;
-    for (size_t i = 0; i < controls_.size() && !controller.voice_id && controller.tempo <= 0 && !controller.pan; ++i)
+    int kind = controller.voice_id ? 0 : controller.tempo > 0 ? 1 : controller.sig ? 2 : controller.pan ? 3 : 0;
+    bool other = controller.voice_id || controller.tempo > 0 || controller.sig || controller.pan;
+    for (size_t i = 0; i < controls_.size() && !other; ++i)
         if (controller.controls.count(controls_[i].first->key)) {
-            kind = 3 + int(i);
+            kind = 4 + int(i);
             break;
         }
     kind_->SetSelection(kind);
@@ -1399,9 +1688,10 @@ void ControllerDialog::on_ok(wxCommandEvent &evt) {
     int k = kind_->GetSelection();
     bool fine = true;
     if (k == 1) fine = check_range(this, tempo_, "Tempo", kMinBpm, kMaxBpm, true);
-    else if (k == 2) fine = check_range(this, pan_, "Pan", -100, 100, true);
-    else if (k >= 3 && size_t(k - 3) < controls_.size()) {
-        const auto &c = controls_[size_t(k - 3)];
+    else if (k == 2) fine = check_sig(this, sig_);
+    else if (k == 3) fine = check_range(this, pan_, "Pan", -100, 100, true);
+    else if (k >= 4 && size_t(k - 4) < controls_.size()) {
+        const auto &c = controls_[size_t(k - 4)];
         fine = check_range(this, c.second, c.first->label, c.first->lo, c.first->hi, true);
     }
     if (fine) evt.Skip();
@@ -1438,6 +1728,7 @@ Note ControllerDialog::result() const {
     // one change to a controller: the kind chosen, and nothing else
     Note n = note_;
     n.tempo = 0;
+    n.sig.reset();
     n.voice_id.reset();
     n.voice_name.reset();
     n.pan.reset();
@@ -1454,10 +1745,13 @@ Note ControllerDialog::result() const {
         if (read_number(tempo_->GetValue(), &bpm) && bpm > 0)
             n.tempo = std::max(kMinBpm, std::min(kMaxBpm, std::nearbyint(bpm * 1e3) / 1e3));
     } else if (k == 2) {
+        Sig sig = parse_sig(U(sig_->GetValue()), {0, 0});
+        if (sig.first) n.sig = sig;
+    } else if (k == 3) {
         double pan = 0;
         if (read_number(pan_->GetValue(), &pan)) n.pan = std::max(-100, std::min(100, int(std::lrint(pan))));
-    } else if (k >= 3 && size_t(k - 3) < controls_.size()) {
-        const auto &c = controls_[size_t(k - 3)];
+    } else if (k >= 4 && size_t(k - 4) < controls_.size()) {
+        const auto &c = controls_[size_t(k - 4)];
         double v = 0;
         if (read_number(c.second->GetValue(), &v))
             n.controls[c.first->key] = {{0.0, std::max(double(c.first->lo), std::min(double(c.first->hi), std::nearbyint(v)))}};
@@ -1518,12 +1812,14 @@ TrackDialog::TrackDialog(wxWindow *parent, Studio *studio, const Track &track)
     // the people's names first and then the instruments, which sing too; then
     // DECtalk's, the SSI-263's and Microsoft's. Choosing an engine fills the
     // voice box with that engine's voices alone, so neither list is long.
-    for (const VoiceListing &v : studio->voice_list()) {
+    // An engine or voice that cannot sing here is left out, unless the track
+    // sings with it already.
+    int current = studio->track_voice_of(track);
+    for (const VoiceListing &v : offered(studio->voice_list(), current)) {
         if (engines_.empty() || engines_.back().name != v.family) engines_.push_back({v.family, v.available, {}});
         engines_.back().voices.push_back(v);
     }
     if (engines_.empty()) engines_.push_back({"VocalWriter", true, {{0, "Robert", "VocalWriter", true}}});
-    int current = studio->track_voice_of(track);
     size_t engine = 0;
     for (size_t e = 0; e < engines_.size(); ++e)
         for (const VoiceListing &v : engines_[e].voices)
@@ -1556,8 +1852,8 @@ TrackDialog::TrackDialog(wxWindow *parent, Studio *studio, const Track &track)
     labelled(this, outer, "Pan", pan_, 0, "-100 far left to 100 far right");
     velocity_ = spin(this, 1, 127, track.velocity, 80);
     labelled(this, outer, "Velocity", velocity_, 0,
-             "how hard the notes are sung or struck, by VocalWriter's voices and the GM Soundbank only; its songs "
-             "used about 114");
+             "how hard the notes are sung or struck, by VocalWriter's voices and the instruments only; "
+             "VocalWriter's songs used about 114");
 
     own_consonants_ = new wxCheckBox(this, wxID_ANY, "&Consonant length just for this track");
     own_consonants_->SetValue(bool(track.consonants));
@@ -1638,7 +1934,7 @@ void TrackDialog::sync_velocity() {
     // or one of VocalWriter's the track changes to further on
     enable_labelled(velocity_, changes_to_vocalwriter_ || (!e.voices.empty() && uses_velocity(e.voices.front().id)));
     // an instrument has no consonants and no voice to set up
-    bool sings = e.voices.empty() || !is_gm_voice(e.voices.front().id);
+    bool sings = e.voices.empty() || !is_instrument(e.voices.front().id);
     own_consonants_->Enable(sings);
     consonants_->Enable(sings && own_consonants_->GetValue());
     own_voice_->Enable(sings);
@@ -1689,7 +1985,8 @@ void TrackDialog::apply(Track &track) const {
 // -- BackingDialog ------------------------------------------------------------------------
 
 BackingDialog::BackingDialog(wxWindow *parent, const Track &track)
-    : wxDialog(parent, wxID_ANY, "Backing track") {
+    : wxDialog(parent, wxID_ANY, "Backing track"), was_start_(track.audio_beat),
+      start_shown_(W(fmt_g(std::nearbyint(track.audio_beat * 1000) / 1000))) {
     wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
     name_ = new wxTextCtrl(this, wxID_ANY, W(track.name), wxDefaultPosition, wxSize(220, -1));
     labelled(this, outer, "Name", name_);
@@ -1698,9 +1995,10 @@ BackingDialog::BackingDialog(wxWindow *parent, const Track &track)
     wxButton *browse = new wxButton(this, wxID_ANY, "&Browse...");
     browse->Bind(wxEVT_BUTTON, &BackingDialog::on_browse, this);
     outer->Add(browse, 0, wxALL, 6);
-    start_ = new wxTextCtrl(this, wxID_ANY, W(fmt_g(track.audio_start)), wxDefaultPosition, wxSize(80, -1));
+    start_ = new wxTextCtrl(this, wxID_ANY, start_shown_, wxDefaultPosition, wxSize(80, -1));
     labelled(this, outer, "Starts at", start_, 0,
-             "seconds into the song the file begins; below 0 leaves out that much of its opening");
+             "beats into the song the file begins, as a rest's length is written: 0 is the start, 1.25 a beat "
+             "and a quarter in; below 0 leaves out that much of its opening");
     volume_ = spin(this, 0, kMaxVolume, track.volume, 80);
     labelled(this, outer, "Volume", volume_, 0, "per cent");
     pan_ = spin(this, -100, 100, track.pan, 80);
@@ -1736,8 +2034,8 @@ void BackingDialog::on_ok(wxCommandEvent &evt) {
         path_->SetFocus();
         path_->SelectAll();
     } else if (!read_number(start_->GetValue(), &v)) {
-        wxMessageBox("Starts at is a number of seconds, such as 0, 2.5 or -1.", "Backing track",
-                     wxOK | wxICON_ERROR, this);
+        wxMessageBox("Starts at is a number of beats into the song, such as 0, 1.25 or -2.",
+                     "Backing track", wxOK | wxICON_ERROR, this);
         start_->SetFocus();
         start_->SelectAll();
     } else {
@@ -1750,8 +2048,11 @@ void BackingDialog::apply(Track &track) const {
     name.Trim(true).Trim(false);
     track.name = name.empty() ? "Backing" : U(name);
     track.audio = file();
+    // left as shown, it keeps the beat it had, which may lie between the
+    // thousandths of a beat it is shown in
     double v = 0;
-    if (read_number(start_->GetValue(), &v)) track.audio_start = std::nearbyint(v * 1000) / 1000;
+    if (start_->GetValue() == start_shown_) track.audio_beat = was_start_;
+    else if (read_number(start_->GetValue(), &v)) track.audio_beat = std::nearbyint(v * 1e6) / 1e6;
     track.volume = volume_->GetValue();
     track.pan = pan_->GetValue();
 }

@@ -185,13 +185,30 @@ if(NOT miniaudio_POPULATED)
   FetchContent_Populate(miniaudio)   # the header only; not its own build
 endif()
 list(APPEND CORE_SOURCES src/audio/player.cpp src/audio/decode.cpp src/audio/miniaudio.c)
+# -- TinySoundFont -------------------------------------------------------------
+# The SoundFonts loaded in the Soundbank manager play through it
+# (src/voices/soundfont.cpp): one header, compiled once by
+# src/voices/tinysoundfont.c, at a pinned commit.
+FetchContent_Declare(tinysoundfont
+    GIT_REPOSITORY https://github.com/schellingb/TinySoundFont.git
+    GIT_TAG 853a0a171759f1ddba0de1442133a75912bbeffa     # main, 2026-07-19
+)
+FetchContent_GetProperties(tinysoundfont)
+if(NOT tinysoundfont_POPULATED)
+  FetchContent_Populate(tinysoundfont)   # the header only; not its own build
+endif()
+list(APPEND CORE_SOURCES src/voices/soundfont.cpp src/voices/tinysoundfont.c)
+# -- FLAC and Ogg Vorbis ------------------------------------------------------
+# What Export audio writes besides WAV (src/audio/encode.cpp).
+include(${SVS_ROOT}/cmake/xiph.cmake)
+list(APPEND CORE_SOURCES src/audio/encode.cpp)
 
 add_library(svs_core STATIC ${CORE_SOURCES})
 target_include_directories(svs_core PUBLIC ${SVS_ROOT}/src ${SVS_ROOT}/third_party/nlohmann
-                           ${miniaudio_SOURCE_DIR})
+                           ${miniaudio_SOURCE_DIR} ${tinysoundfont_SOURCE_DIR})
 target_compile_definitions(svs_core PUBLIC SVS_SOURCE_DIR="${SVS_ROOT}" ${SVS_ENGINE_DEFS})
-target_link_libraries(svs_core PUBLIC vwengine ${SVS_ENGINE_LIBS})
-set_source_files_properties(src/audio/miniaudio.c PROPERTIES COMPILE_OPTIONS "-w")
+target_link_libraries(svs_core PUBLIC vwengine ${SVS_ENGINE_LIBS} FLAC svs_vorbis)
+set_source_files_properties(src/audio/miniaudio.c src/voices/tinysoundfont.c PROPERTIES COMPILE_OPTIONS "-w")
 if(WIN32)
   target_link_libraries(svs_core PUBLIC winmm ole32)
 elseif(APPLE)

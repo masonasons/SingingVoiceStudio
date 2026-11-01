@@ -5,14 +5,21 @@
 // installed: a song written with DECtalk's Betty still says Betty on a machine
 // without DECtalk, and says why it cannot sing.
 //
-//      0 -  999   VocalWriter's voice bank, in the bank's own order
-//   1000 - 1999   DECtalk
-//   2000 - 2999   the SSI-263
-//   3000 - 3999   Microsoft Sam, Mike and Mary, and the SAPI 4 voice modes
-//   4000 - 4999   MacinTalk: Apple's voices from Mac OS X 10.4 to 10.7, a
-//                 hundred numbers to each generation
-//   5000 - 5999   the GM Soundbank: VocalWriter's own General MIDI instruments
-//                 (GMBank), 5000 + the GM program, and 5128 the drum kit
+//        0 -    999   VocalWriter's voice bank, in the bank's own order
+//     1000 -   1999   DECtalk
+//     2000 -   2999   the SSI-263
+//     3000 -   3999   Microsoft Sam, Mike and Mary, and the SAPI 4 voice modes
+//     4000 -   4999   MacinTalk: Apple's voices from Mac OS X 10.4 to 10.7, a
+//                     hundred numbers to each generation
+//     5000 -  99999   kept for engines still to come that sing
+//   100000 - 100999   the GM Soundbank: VocalWriter's own General MIDI
+//                     instruments (GMBank), 100000 + the GM program, and
+//                     100128 the drum kit
+//   101000 -          the SoundFonts loaded in the Soundbank manager, a
+//                     thousand numbers to each (soundfont.h)
+//
+// The instruments come after every engine that sings, so that a new engine
+// moves none of them.
 //
 // The number is not the only thing a song keeps: a voice outside
 // VocalWriter's bank is saved with its name as well (see Track::voice_name),
@@ -33,7 +40,8 @@ enum : int {
     kSsi263Base = 2000,
     kMicrosoftBase = 3000,
     kMacinTalkBase = 4000,
-    kGmBase = 5000,
+    kGmBase = 100000,
+    kSoundFontBase = 101000,
     kFamilySpan = 1000,
 };
 
@@ -46,11 +54,20 @@ inline bool is_vocalwriter_voice(int id) { return id >= kVocalWriterBase && id <
 //: Whether a voice is one of the GM Soundbank's instruments, which play the
 //: notes, chords and all, rather than sing them.
 inline bool is_gm_voice(int id) { return id >= kGmBase && id < kGmBase + kFamilySpan; }
-//: Whether a voice hears velocity as more than loudness: VocalWriter's do.
-inline bool uses_velocity(int id) { return is_vocalwriter_voice(id) || is_gm_voice(id); }
-//: Whether an engine follows VocalWriter's volume control itself; for the
-//: others the mix does.
-inline bool sings_volume(int id) { return is_vocalwriter_voice(id) || is_gm_voice(id); }
+//: Whether a voice is one of a SoundFont's (soundfont.h).
+inline bool is_soundfont_voice(int id) { return id >= kSoundFontBase; }
+//: Whether a voice is an instrument, the GM Soundbank's or a SoundFont's,
+//: which plays the notes, chords and all, rather than sings them.
+inline bool is_instrument(int id) { return is_gm_voice(id) || is_soundfont_voice(id); }
+//: Whether a voice is a drum kit, each key a drum: the GM Soundbank's, or a
+//: SoundFont's preset in its percussion bank (soundfont.h).
+bool is_drum_kit(int id);
+//: Whether a voice hears velocity as more than loudness: VocalWriter's and
+//: the instruments do.
+inline bool uses_velocity(int id) { return is_vocalwriter_voice(id) || is_instrument(id); }
+//: Whether an engine follows VocalWriter's volume control itself (a
+//: SoundFont as MIDI's channel volume); for the others the mix does.
+inline bool sings_volume(int id) { return is_vocalwriter_voice(id) || is_instrument(id); }
 //: The General MIDI name of a program, 0-127: "Acoustic Grand Piano".
 const char *gm_program_name(int program);
 //: The General MIDI name of the drum on a key, 35 to 81, or null.

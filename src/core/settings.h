@@ -9,10 +9,19 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "core/project.h"
 
 namespace svs {
+
+//: A SoundFont loaded in the Soundbank manager, and the slot its voices are
+//: numbered from: 101000 + 1000 * slot (voices/soundfont.h).
+struct SoundFontFile {
+    std::string path;
+    int slot = 0;
+    bool operator==(const SoundFontFile &o) const { return path == o.path && slot == o.slot; }
+};
 
 struct Settings {
     //: preview a note as it is nudged, so pitch and length can be heard
@@ -37,11 +46,19 @@ struct Settings {
     //: a vowel an imported MIDI file holds over several notes sings its
     //: first sound until the last of them (pronounce, `plain_held`)
     bool plain_held_vowels = false;
-    //: an imported MIDI file's played parts on the instruments the soundbank
-    //: has an octave off are transposed an octave (import_midi, `octaves`)
+    //: the GM Soundbank moves the instruments it has an octave off by that
+    //: octave (set_gm_octaves)
     bool octave_instruments = false;
     //: while the song plays, every track's cursor moves to the note sung
     bool follow_playback = false;
+    //: what Export audio wrote last: ".wav", ".flac" or ".ogg"
+    std::string export_format = ".wav";
+    //: the SoundFonts loaded in the Soundbank manager
+    std::vector<SoundFontFile> soundfonts;
+    //: what plays the parts of an imported MIDI file or VocalWriter song that
+    //: are not sung: the path of one of `soundfonts`, or empty for the GM
+    //: Soundbank
+    std::string default_soundbank;
 };
 
 Settings load_settings();

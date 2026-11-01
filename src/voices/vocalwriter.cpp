@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <set>
 
 #include "core/paths.h"
 #include "core/phonology.h"
@@ -50,6 +51,7 @@ const int kBendScale = 8;
 const int kBendRange = 12;
 
 std::atomic<bool> g_own_path{false};
+std::atomic<bool> g_gm_octaves{false};
 
 //: Python's round(): halves go to the even neighbour.
 long round_half_even(double x) { return long(std::nearbyint(x)); }
@@ -75,6 +77,8 @@ int bend_raw(double semitones, int range) {
 
 void set_vocalwriter_own_path(bool on) { g_own_path = on; }
 bool vocalwriter_own_path() { return g_own_path; }
+void set_gm_octaves(bool on) { g_gm_octaves = on; }
+bool gm_octaves() { return g_gm_octaves; }
 
 // -- the data ---------------------------------------------------------------
 
@@ -343,6 +347,16 @@ struct SeqPart {
     double residual = 1.0;
 };
 
+//: How far the GM Soundbank's instrument for program `program` (0 to 127) is
+//: moved, in semitones, to sound where its notes say (gm_octaves): some of
+//: them sound an octave low, two an octave high.
+int soundbank_octave(int program) {
+    static const std::set<int> low = {29, 30, 31, 32, 34, 36, 37, 53, 80, 86, 96, 100, 101};
+    if (low.count(program)) return 12;
+    if (program == 98 || program == 102) return -12;
+    return 0;
+}
+
 //: False if the part sings nothing. A GM Soundbank voice plays it as an
 //: instrument track.
 bool to_seq(const Part &part, int voice_id, SeqPart *sp) {
@@ -395,6 +409,16 @@ bool to_seq(const Part &part, int voice_id, SeqPart *sp) {
         return sp_.second + (tick - sp_.tick) * 60.0 / (kTicksPerBeat * sp_.bpm);
     };
 
+    // how far the instrument in force at a beat is moved (soundbank_octave):
+    // the part's voice, then each change
+    auto octave_at = [&](double at) {
+        if (!played || !gm_octaves()) return 0;
+        int v = voice_id;
+        for (const auto &c : part.voices)
+            if (c.first <= at + 1e-9) v = c.second;
+        return v == kGmDrums || !is_gm_voice(v) ? 0 : soundbank_octave(v - kGmBase);
+    };
+
     // placed by where each note begins, so that nothing drifts
     std::vector<vwseq_note> &notes = sp->notes;
     double beat = 0.0;
@@ -431,7 +455,9 @@ bool to_seq(const Part &part, int voice_id, SeqPart *sp) {
             vwseq_note v{};
             v.start = a;
             v.duration = std::max(1, c - a);
-            v.key = n.midi;
+            // a note the move would take off the keyboard stays where it is
+            int move = octave_at(beat - n.beats);
+            v.key = n.midi + move >= 0 && n.midi + move <= 127 ? n.midi + move : n.midi;
             v.velocity = n.velocity;
             notes.push_back(v);
             if (first_sung < 0) first_sung = a;

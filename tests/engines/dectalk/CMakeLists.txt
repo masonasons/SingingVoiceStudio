@@ -1,10 +1,12 @@
 # DECtalk on its own: a console program that lists the voices, says whether
-# DECtalk.dll and its dictionary are there, and if they are, sings a few
-# tunes in a few voices to WAV files, reports how well the timing and the
-# pitch came out, compares the singing with DECtalk's own "Happy Birthday",
-# and checks with DECtalk's phoneme log that it sang what it was sent.
+# DECtalk is there, and if it is, sings a few tunes in a few voices to WAV
+# files, reports how well the timing and the pitch came out, compares the
+# singing with DECtalk's own "Happy Birthday", and checks with DECtalk's
+# phoneme log that it sang what it was sent. On Windows DECtalk is compiled
+# in (cmake/engines/dectalk.cmake); elsewhere, or with SVS_DECTALK_STATIC off,
+# its library and dictionary are built into voices/dectalk first
+# (scripts/build_dectalk.ps1, scripts/build_dectalk_mac.sh).
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\build_dectalk.ps1
 #   cmake -G Ninja -S tests/engines/dectalk -B build-tests/dectalk
 #   cmake --build build-tests/dectalk
 #   build-tests/dectalk/dectalk_sing_test [OUT_DIR]

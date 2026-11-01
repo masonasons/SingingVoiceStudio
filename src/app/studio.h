@@ -74,6 +74,13 @@ public:
     bool plain_held() const { return settings_.plain_held_vowels; }
     //: render notes on the current track's voice and play them
     void preview(const std::vector<Note> &notes, std::function<void()> done);
+    //: Render the current track alone, `put` on its rows `spots`, from row
+    //: `from` on, and play it if `wanted` still says so; `done` is told
+    //: whether it plays.
+    void preview_track(const std::vector<int> &spots, const std::vector<Note> &put, int from,
+                       std::function<bool()> wanted, std::function<void(bool)> done);
+    bool playing() { return player_.playing(); }
+    void stop_playing() { stop_audio(); }
     //: `marked`: with the dictionary's syllables marked (Lexicon::phonemes)
     void lookup(const std::vector<std::string> &words,
                 std::function<void(std::map<std::string, std::vector<std::string>>)> done,
@@ -89,6 +96,8 @@ private:
     // -- interface ---------------------------------------------------------
     void build();
     void build_menu();
+    wxMenu *note_menu();
+    wxMenu *track_menu();
     void on_playback_shortcut(wxKeyEvent &evt);
     void on_keys(wxCommandEvent &);
 
@@ -115,6 +124,8 @@ private:
     void on_track_edit(wxCommandEvent &);
     void on_track_remove(wxCommandEvent &);
     void move_tracks(int delta);
+    void select_all_tracks();
+    void transpose_tracks(int by);
     void on_panes(wxCommandEvent &);
     void on_app_activate(wxActivateEvent &evt);
     void come_back();
@@ -128,7 +139,7 @@ private:
     std::vector<int> selected() const;
     void select_only(const std::vector<int> &rows);
     double position(int index);
-    int bar_of(int index);
+    Sig sig_at(int index);
     void on_goto_bar(wxCommandEvent &);
     void on_bar_rest(wxCommandEvent &);
     std::vector<std::string> bars();
@@ -137,7 +148,7 @@ private:
     //: `voice`: the voice in force at the row, if the caller knows it
     void refresh_row(int i, int voice = -1);
     //: whether an instrument plays the current track's row `i`
-    bool played_at(int i) const { return is_gm_voice(voice_at(i)); }
+    bool played_at(int i) const { return is_instrument(voice_at(i)); }
     void refresh_bars();
     void nudge_pitch(int by);
     void nudge_length(bool up);
@@ -158,10 +169,12 @@ private:
     void on_add_text(wxCommandEvent &);
     void on_add_note(wxCommandEvent &);
     void on_add_rest(wxCommandEvent &);
+    void on_note_to_rest(wxCommandEvent &);
     void on_add_controller(wxCommandEvent &);
     std::string controller_said(int i);
     std::vector<int> selected_notes();
     const Note *note_before(int at);
+    const Note *note_after(int at);
     void on_edit(wxCommandEvent &);
     void on_remove(wxCommandEvent &);
 
@@ -193,6 +206,9 @@ private:
                 std::function<void(RenderResult)> done);
     void on_auto_preview(wxCommandEvent &);
     void on_panthera(wxCommandEvent &);
+    void on_soundbanks(wxCommandEvent &);
+    int soundbank_slot();
+    std::string soundbank_name(int slot) const;
     void on_close_rests(wxCommandEvent &);
     double rests_to_close() const;
     void on_remove_velocities(wxCommandEvent &);
@@ -254,6 +270,7 @@ private:
     void on_append(wxCommandEvent &);
     void take_midi(const std::string &path, bool append);
     void import_vocalwriter(const std::string &path);
+    void cannot_load(const std::string &path, const std::string &why);
     void imported_words(std::vector<ImportedPart> parts,
                         const std::map<std::string, std::vector<std::string>> &found, size_t pending);
     void on_close(wxCloseEvent &evt);

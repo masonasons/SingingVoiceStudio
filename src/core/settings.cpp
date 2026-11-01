@@ -69,6 +69,21 @@ Settings load_settings() {
         s.octave_instruments = doc["octave_instruments"].get<bool>();
     if (doc.contains("follow_playback") && doc["follow_playback"].is_boolean())
         s.follow_playback = doc["follow_playback"].get<bool>();
+    if (doc.contains("export_format") && doc["export_format"].is_string())
+        s.export_format = doc["export_format"].get<std::string>();
+    if (doc.contains("soundfonts") && doc["soundfonts"].is_array())
+        for (const json &f : doc["soundfonts"]) {
+            if (!f.is_object() || !f.contains("path") || !f["path"].is_string()) continue;
+            SoundFontFile sf;
+            sf.path = f["path"].get<std::string>();
+            if (f.contains("slot") && f["slot"].is_number_integer()) sf.slot = f["slot"].get<int>();
+            // each in a slot of its own, from 0, its numbers inside an int
+            bool taken = sf.slot < 0 || sf.slot > 999999;
+            for (const SoundFontFile &o : s.soundfonts) taken = taken || o.slot == sf.slot || o.path == sf.path;
+            if (!sf.path.empty() && !taken) s.soundfonts.push_back(sf);
+        }
+    if (doc.contains("default_soundbank") && doc["default_soundbank"].is_string())
+        s.default_soundbank = doc["default_soundbank"].get<std::string>();
     return s;
 }
 
@@ -86,6 +101,11 @@ bool save_settings(const Settings &s) {
     doc["plain_held_vowels"] = s.plain_held_vowels;
     doc["octave_instruments"] = s.octave_instruments;
     doc["follow_playback"] = s.follow_playback;
+    doc["export_format"] = s.export_format;
+    json fonts = json::array();
+    for (const SoundFontFile &f : s.soundfonts) fonts.push_back({{"path", f.path}, {"slot", f.slot}});
+    doc["soundfonts"] = fonts;
+    if (!s.default_soundbank.empty()) doc["default_soundbank"] = s.default_soundbank;
     return write_text(in_folder("settings.json"), doc.dump(1) + "\n");
 }
 

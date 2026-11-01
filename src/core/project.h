@@ -7,6 +7,7 @@
 // in it; that is what Export WAV is for.
 #pragma once
 
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -89,11 +90,14 @@ struct Note {
     //: nothing. `voice_id` is the voice this track sings with from here on,
     //: any engine's, its name kept as a track keeps it (Track::voice_name).
     //: `pan` is the track's pan from here on, -100 to 100, whatever sings it.
+    //: `sig` is the time signature from here on, for the whole song as the
+    //: tempo is, a new bar beginning where it stands.
     bool controller = false;
     double tempo = 0;
     std::optional<int> voice_id;
     std::optional<std::string> voice_name;
     std::optional<int> pan;
+    std::optional<Sig> sig;
 
     Note() = default;
     Note(std::vector<std::string> ph, int p = kDefaultPitch, double b = kDefaultBeats,
@@ -112,7 +116,7 @@ struct Note {
         return phonemes == o.phonemes && pitch == o.pitch && beats == o.beats &&
                word == o.word && bend == o.bend && mod == o.mod && velocity == o.velocity &&
                controls == o.controls && hold == o.hold && controller == o.controller && tempo == o.tempo &&
-               voice_id == o.voice_id && voice_name == o.voice_name && pan == o.pan;
+               voice_id == o.voice_id && voice_name == o.voice_name && pan == o.pan && sig == o.sig;
     }
 };
 
@@ -147,9 +151,10 @@ struct Track {
     //: A backing track: the sound file it plays under the voices, at its
     //: volume and pan, instead of singing. Empty for a part that sings.
     std::string audio;
-    //: where in the song the file begins, in seconds: later than the first
-    //: beat when above 0, and below 0 its opening is left out
-    double audio_start = 0;
+    //: where in the song the file begins, in beats, so it keeps its place
+    //: against the bars: later than the first beat when above 0, and below
+    //: 0 its opening is left out
+    double audio_beat = 0;
     //: which note was last selected here; not saved
     int cursor = 0;
 
@@ -160,7 +165,7 @@ struct Track {
                volume == o.volume && pan == o.pan && velocity == o.velocity &&
                mute == o.mute && solo == o.solo &&
                notes == o.notes && voice == o.voice && reverb == o.reverb &&
-               consonants == o.consonants && audio == o.audio && audio_start == o.audio_start;
+               consonants == o.consonants && audio == o.audio && audio_beat == o.audio_beat;
     }
 };
 
@@ -183,6 +188,29 @@ struct Clock {
 
 //: The changes in order, one to a beat, none at the start or out of range.
 std::vector<TempoChange> clean_tempo_changes(std::vector<TempoChange> changes);
+
+//: From `beat` on, counted from the song's start, the bars are of `sig`, the
+//: first of them beginning there.
+struct SigChange {
+    double beat = 0;
+    Sig sig = kDefaultSig;
+    bool operator==(const SigChange &o) const { return beat == o.beat && sig == o.sig; }
+};
+
+//: Where the bars fall: a time signature from the start, then its changes,
+//: each beginning a new bar; a bar one cuts short is still a bar.
+struct Meter {
+    Sig sig = kDefaultSig;
+    std::vector<SigChange> changes;     // in order, all after the first beat
+    //: (bar, beat) as bar_and_beat has them; before the first beat, bar 0 and below
+    std::pair<int, double> bar_and_beat(double position) const;
+    //: the beats from the song's start to `beat` of `bar`: bar_and_beat turned round
+    double position(int bar, double beat = 1) const;
+    Sig sig_at(double position) const;
+};
+
+//: The changes in order, one to a beat, none at the start or not a signature.
+std::vector<SigChange> clean_sig_changes(std::vector<SigChange> changes);
 
 //: Everything a song is, apart from the window's own state.
 struct Song {
@@ -207,6 +235,8 @@ struct Song {
     //: at one beat, the one higher up wins, and one at the very start is the
     //: tempo the song starts at
     Clock clock() const;
+    //: the time signature and every track's changes of it, as clock() has the tempo
+    Meter meter() const;
 };
 
 //: A song begun afresh, a new one or one imported from MIDI: with the
@@ -216,17 +246,21 @@ constexpr int kVocalWriterPortamento = 40;
 constexpr Reverb kVocalWriterReverb{40, 24};
 Song fresh_song();
 
-//: A track of rests holding the tempo changes, each at its beat: how an
-//: imported song brings its changes in, wherever they fall.
-Track tempo_track(const std::vector<TempoChange> &changes);
+//: A track of rests holding the tempo and time signature changes, each at
+//: its beat: how an imported song brings its changes in, wherever they fall.
+Track tempo_track(const std::vector<TempoChange> &changes, const std::vector<SigChange> &sigs = {});
+//: what the Tempo track holds, as said: "2 tempo changes and 1 time
+//: signature change"; empty for none
+std::string tempo_map_said(size_t tempos, size_t sigs);
 //: whether a track has a note anybody sings
 bool sings(const Track &track);
 //: the track's changes of voice, as (beat, voice), in order
 std::vector<std::pair<double, int>> voice_changes(const Track &track);
 //: the song at its starting tempo throughout, every tempo change taken out
 void steady_tempo(Song &song);
-//: steady_tempo, and the tracks that held nothing but tempo changes taken out
-//: with them, as an imported song's Tempo track
+//: steady_tempo, every time signature change taken out too, and the tracks
+//: that held nothing but those changes taken out with them, as an imported
+//: song's Tempo track
 void drop_tempo_map(Song &song);
 
 // -- what is shown --------------------------------------------------------
@@ -285,7 +319,12 @@ std::string song_fingerprint(const Song &song);
 // -- MIDI --------------------------------------------------------------------
 
 //: The tracks worth importing, as [(name, note count)].
-std::vector<std::pair<std::string, int>> midi_tracks(const std::string &path);
+//: The name a part the file leaves unnamed is given after its program,
+//: 0-127, and whether it is the drums: the instrument or drum kit the default
+//: soundbank plays it with. Empty is the GM Soundbank's name for the program
+//: (gm_program_name), and "Drums" for the drums.
+using ProgramNames = std::function<std::string(int, bool)>;
+std::vector<std::pair<std::string, int>> midi_tracks(const std::string &path, const ProgramNames &program_names = {});
 
 //: A track of a MIDI file as the import offers it.
 struct MidiPart {
@@ -301,7 +340,8 @@ struct MidiPart {
 };
 //: `lyrics_on`: the channel a type 0 file's lyrics go to (lyric_choice);
 //: -1 for the one most of them fall on.
-std::vector<MidiPart> midi_parts(const std::string &path, int lyrics_on = -1);
+std::vector<MidiPart> midi_parts(const std::string &path, int lyrics_on = -1,
+                                 const ProgramNames &program_names = {});
 //: The channels a type 0 file's lyrics could be sung on, and the likeliest;
 //: none when there is nothing to choose (one channel, or no lyrics).
 struct LyricChoice {
@@ -335,6 +375,8 @@ struct Imported {
     //: the tempo changes after the start, in the file's beats
     std::vector<TempoChange> tempo_changes;
     Sig sig = kDefaultSig;
+    //: and the time signature's
+    std::vector<SigChange> sig_changes;
     std::vector<ImportedPart> parts;
     //: how many short rests were closed (close_short_rests)
     int closed_rests = 0;
@@ -346,15 +388,12 @@ struct Imported {
 //: part's program changes are changes of voice, to the one `programs` gives
 //: each number, as vocalwriter_program_voices does (-1 for none).
 //: `close_word_rests`: a sung part's rests in the middle of a word are
-//: closed whatever `close_rests` is (close_short_rests). `octaves`: the
-//: played parts of programs 29 - 32, 34, 36, 37, 53, 80, 86, 96, 100 and 101
-//: are moved an octave up, and of 98 and 102 an octave down, as the
-//: soundbank's instruments for them sound an octave off. `remove_volumes`:
+//: closed whatever `close_rests` is (close_short_rests). `remove_volumes`:
 //: the sung parts keep the track's volume, none of its changes on the notes.
 Imported import_midi(const std::string &path, const std::vector<std::string> &names, double close_rests = 0,
                      const std::vector<std::string> &played = {}, bool remove_velocities = false,
                      int lyrics_on = -1, const std::vector<int> &programs = {}, bool close_word_rests = false,
-                     bool octaves = false, bool remove_volumes = false);
+                     bool remove_volumes = false, const ProgramNames &program_names = {});
 
 // -- tracks an instrument plays ---------------------------------------------
 

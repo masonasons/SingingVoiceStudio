@@ -3,7 +3,8 @@
 VocalWriter Studio rebuilt in C++ and wxWidgets, with more singers in it, for
 Windows and macOS. The window, the menus, the keys, the dialogs, the messages
 and the project files are derived from VocalWriter Studio; what is new is that a track can be sung by any of
-five synthesisers, or played by VocalWriter's own General MIDI instruments:
+five synthesisers, or played by VocalWriter's own General MIDI instruments or
+by SoundFonts:
 
 | engine | voices | numbers | what it is |
 |---|---|---|---|
@@ -12,11 +13,15 @@ five synthesisers, or played by VocalWriter's own General MIDI instruments:
 | **SSI-263** | SSI-263, Deep, Bright, Child | 2000 - 2003 | the chip itself, driven at register level (github.com/tgeczy/ssi263-speech) |
 | **Microsoft** | Sam, Mike, Mary, each plain, in Hall, in Stadium, in Space, Whisper, RoboSoft One to Six | 3000 - 3050 | the SAPI 5 engine rebuilt in C, with the SAPI 4 voice modes (github.com/KamiKitsune420/ms-sam-mike-mary-decomp) |
 | **MacinTalk** | Agnes, Albert, Bad News, Bahh, Bells, Boing, Bruce, Bubbles, Cellos, Deranged, Fred, Good News, Hysterical, Junior, Kathy, Pipe Organ, Princess, Ralph, Trinoids, Vicki, Victoria, Whisper, Zarvox, from each of Mac OS X 10.4 Tiger, 10.5 Leopard, 10.6 Snow Leopard and 10.7 Lion, and Alex from 10.5 on | 4000 - 4022, 4100 - 4123, 4200 - 4223, 4300 - 4323 | Apple's own engines: on Windows run by Panthera's host (github.com/tgeczy/panthera-speech) and sung through Apple's TUNE notation; on a Mac the system's own voices, spoken from phonemes and retuned to the score (see below) |
-| **GM Soundbank** | the 128 General MIDI instruments and a drum kit | 5000 - 5127, 5128 | VocalWriter 2.0's own instrument bank and wavetable synthesiser, which played its MIDI tracks (see below) |
+| **GM Soundbank** | the 128 General MIDI instruments and a drum kit | 100000 - 100127, 100128 | VocalWriter 2.0's own instrument bank and wavetable synthesiser, which played its MIDI tracks (see below) |
+| **SoundFonts** | every preset of each SoundFont (.sf2) loaded, up to a thousand | 101000 - 101999 for the first, 102000 - 102999 for the next, and so on | played by TinySoundFont (github.com/schellingb/TinySoundFont), compiled in (see below) |
 
 A voice's number is what a song saves, and it is fixed per engine, so a song
 written with DECtalk Betty still says Betty on a machine without DECtalk and
-says why it cannot sing there.
+says why it cannot sing there. The engines that sing have the numbers below
+100000, room for more of them; the instruments come after, from 100000 on. A
+song is saved with the name of every voice but VocalWriter's own as well, and
+the name wins if the numbers ever disagree.
 
 Everything renders through one path. A part is cut into phrases at its rests,
 the consonants are moved in front of the beat so the vowel lands on it, each
@@ -52,12 +57,16 @@ the others through the shared pitch curve.
 -- WAV, MP3, FLAC or Ogg Vorbis -- played under the voices: the band the song
 is sung over. It sits in the tracks list like any part, with its own volume,
 pan, mute and solo, and Enter on it sets its file and where it starts, in
-seconds into the song (below 0 leaves out that much of the file's opening).
+beats from the start of the song, written as a rest's length is: 0 is the
+start, 1.25 a beat and a quarter in, and below 0 leaves out that much of
+the file's opening.
 It starts at half volume, as a finished recording is far louder than a voice
-alone. It is mixed in after the reverb, which is the voices' room alone, and
-is placed by the clock rather than the beat, so changing the tempo moves the
-voices but not the recording. Play from the cursor starts the file at the
-same moment; Export WAV includes it, Export tracks leaves it out (it is a file
+alone. It is mixed in after the reverb, which is the voices' room alone. It
+starts on its beat whatever the tempo, but plays at its own speed from
+there, so changing the tempo moves the voices after that against the
+recording. A project saved with the start in seconds, as before, has it
+put on the beat the song's tempo gave it. Play from the cursor starts the file at the
+same moment; Export audio includes it, Export tracks leaves it out (it is a file
 already). The project saves where the file is; a project sent along with its
 file in the same folder finds it there. VocalWriter Studio reads such a
 project too, the backing track as a part with no notes.
@@ -66,12 +75,16 @@ project too, the backing track as a part with no notes.
 notes that takes no time and is sung by nobody: a change from where it stands
 on. Its tempo change applies to the entire song, whichever track it is on --
 where two tracks change the tempo at one beat, the one higher up wins -- and
-mute and solo leave it in force. A pan change moves the track from there on,
+mute and solo leave it in force. A time signature change does the same, and
+a new bar begins where it stands, so the Bar column, Go to bar, a rest to the
+end of the bar, the metronome and Export MIDI count the bars by it from
+there; Song settings keeps the one the song starts with. A pan change moves the track from there on,
 whatever sings it. Every engine sings to the tempo, 5 to 500 beats a minute
 (VocalWriter's went from 10 to 250), and VocalWriter's voices take the
-changes as their own song's. A MIDI file's tempo changes come in on a Tempo
-track at the top, rests and controllers alone, so each one falls exactly
-where the file has it. The project keeps a track's controllers beside its
+changes as their own song's. A MIDI file's tempo and time signature changes
+come in on a Tempo track at the top, rests and controllers alone, so each
+one falls exactly where the file has it; a file with neither has no Tempo
+track. The project keeps a track's controllers beside its
 notes, so a song without any is the same file as before.
 
 **VocalWriter's controls** are kept on the notes as its songs keep them: a
@@ -112,11 +125,53 @@ volume, the bend range, the detune and the sustain pedal. Like VocalWriter's
 voices it plays the whole track, in stereo, and exported with them and
 nothing panned the song is played as VocalWriter played it.
 
+**SoundFonts** play as engines of their own. Settings > Soundbank manager
+(Ctrl+Shift+K) lists the SoundFonts loaded; Load soundfont adds one (.sf2),
+and Remove, before it, takes out the one selected in the list. A SoundFont
+loaded is at the bottom of the Engine box, named after its file without its
+extension ("SGM-v2.01.sf2" is "SGM-v2.01"), with all its own presets as its
+voices, whatever bank they are in, not only General MIDI's. Each SoundFont has
+a thousand voice numbers: the first loaded 101000 - 101999, the next 102000 -
+102999, and so on, a SoundFont removed leaving its numbers to the next one loaded. Its
+presets are numbered in the order of their bank and program, so **only the
+first 1000 sounds of a SoundFont with more are used**. A preset in bank 128,
+a SoundFont's percussion bank, is a drum kit, and so is one in bank 120 or
+above whose name says it is a kit ("drum", "kit" or "perc"): a SoundFont may
+have several. A drum kit's notes are shown by the drum, as General MIDI
+places them, and are left as they are when a track is transposed. A
+SoundFont plays as the GM Soundbank does -- chords, held notes, velocities,
+the bend, the detune, the sustain pedal and the volume, and the pan in the mix
+-- in stereo. It is played as the SoundFont players play it, VirtualMidiSynth
+and FluidSynth among them, which TinySoundFont alone does not: each preset's
+own attenuation at 0.4 of what the SoundFont 2 specification gives, as E-mu's
+own cards had it; each preset's modulators, with which a SoundFont has the
+velocity and the key open the filter, shorten the envelopes, tune the note
+and set its own velocity curve; and, where a preset sets none of its own,
+the velocity and the volume as the specification has them, 40 log10(value /
+127) dB, so a note at half the velocity, or under a volume control at half,
+is 12 dB down. Of the specification's default modulators, the velocity's on
+the filter is left out, as VirtualMidiSynth leaves it out. A key struck again
+before it was let go is let go the first time first, as on a MIDI channel. The track's volume, which is where a
+MIDI file's CC 7 by CC 11 comes in, is taken the same way: a track at 50% is
+12 dB down, where for the other engines it is 6 dB.
+
+The Soundbank manager's last box, Default soundbank, says what plays the parts
+of a MIDI file or a VocalWriter song that are not sung when it is imported: GM
+Soundbank (built-in), or one of the SoundFonts, which then plays each part
+with its preset in bank 0 of the part's program, failing that the same program
+in another bank, and the drums with its kit at program 0 in bank 128, failing
+that any kit; a part it has nothing for stays on the GM Soundbank. The octave
+a few of the GM Soundbank's instruments are off by (below) is its own: a
+SoundFont plays the notes as they are. The SoundFonts' paths and the default soundbank are kept in the
+settings file, with the other settings, not in the song; the command line uses
+them as the window left them. A SoundFont's samples are read when one of its
+voices first plays.
+
 **VocalWriter's own songs** (.trk) open with File > Import (Ctrl+I) or on the
 command line. Each vocal track comes in as a part with everything VocalWriter
 sang it with: the syllables, phonemes and lyrics, the velocities, the
 controls above, the pitch bends and a voice change wherever the track has
-one. Each instrument track comes in played by the GM Soundbank, with its
+one. Each instrument track comes in played by the default soundbank, with its
 notes, velocities, program changes and controls, the drum track on the drum
 kit. The song's tempo changes come in on a Tempo track at the top, as a MIDI
 file's do, with its reverb and its end (File > Song settings, Song end).
@@ -125,14 +180,17 @@ The karaoke track is left out. With VocalWriter's own sequencer turned on
 VocalWriter playing it, and so is the project it is saved as. Its songs turn a track up past 100% now and then, so a track's volume
 goes to 200%.
 
-**A MIDI file's instruments** come in on the GM Soundbank, as VocalWriter
-took them in: the parts with words are sung, and the others are played with
+**A MIDI file's instruments** come in on the default soundbank, the GM
+Soundbank unless a SoundFont is chosen (above), as VocalWriter took them in: the parts with words are sung, and the others are played with
 the programs the file gives them, channel 10 on the drum kit. When none of
-the parts chosen has words, Import asks last which one is sung, so that it
-comes in as a part to sing, its short rests closed and its notes on AA until
-words are put on them; the box starts on "None", which has every part played
-by the GM Soundbank. A part the file leaves unnamed is named after its
-instrument, the drum kit's "Drums", and so is each part of a track that plays
+the parts chosen has words, Import asks last which are sung, each ticked or
+unticked with Space and none ticked to begin with, so that they come in as
+parts to sing, their short rests closed and their notes on AA until words
+are put on them; with none ticked every part is played by the default soundbank.
+A part the file leaves unnamed is named after its
+instrument, as the default soundbank names the instrument it plays the part
+with: a SoundFont's own name for its preset, its drum kit's for the drums,
+and the GM Soundbank's drums "Drums", and so is each part of a track that plays
 on several channels, a type 0 file's or another's. Import asks first which
 parts come in, each ticked or unticked with Space: Every part, ticked to begin
 with, ticks or unticks all the others, so a few are chosen by unticking it and
@@ -149,6 +207,8 @@ before the note it comes at, sung or played. A sung part's program changes
 after its first note are controllers too, changes of voice to the one
 VocalWriter's own program number picks. A MIDI file
 opened from the desktop or named on the command line comes in the same way.
+One that cannot be read, or a VocalWriter song that cannot, says why in a
+box of its own, put away with OK, to the system's critical stop sound.
 A syllable the file gives no note of its own is sung where it falls: one
 in the middle of a note ("the sea" on one note) divides it there, and one
 in a rest ("to" before "see") has a note from there to the next, at that
@@ -168,9 +228,16 @@ that starts with a vowel is DH IY.
 file under the song's own tracks, chosen as Import chooses them; its tempo
 changes and time signature take the place of the song's.
 
+**Export audio** (File > Export audio, Ctrl+Shift+S) writes the whole song
+to one file, a WAV, a FLAC or an Ogg Vorbis file, as chosen in the file box
+or by the name's ending; the kind chosen last is chosen again next time. A
+FLAC holds exactly the 16-bit samples the WAV would, and Ogg Vorbis is
+written at quality 6, about 190 kbit/s in stereo. The command line writes
+whichever the name given to `-o` ends in. Export tracks writes WAVs.
+
 **Export MIDI** (File > Export MIDI, Ctrl+Shift+M) writes the song as a
 type 1 Standard MIDI File, as VocalWriter's own File > Export did: 240 ticks
-a beat, the time signature and the tempo and its changes on a first track,
+a beat, the time signature and the tempo, and the changes of each, on a first track,
 then a track for each part with something to sing or play, on the MIDI
 channel asked for first -- VocalWriter's Set MIDI Channels: the drum kit on
 channel 10 and the others from 1 up to begin with. A sung note carries its
@@ -210,14 +277,17 @@ rather than f YU, YU, YU. The command line does as the window was last set
 to.
 
 **Instruments an octave off**: a few of the GM Soundbank's instruments sound
-an octave away from where a MIDI file means them to. Settings > Transpose
-certain instruments by an octave when importing MIDI to compensate for their
-different pitch in the soundbank (Ctrl+Shift+O, off until it is turned on)
-moves the played parts of programs 29 - 32, 34, 36, 37, 53, 80, 86, 96, 100
-and 101 an octave up, and of 98 and 102 an octave down, counting from 0,
-note by note by the program each is played with. A sung part, the drum kit
-and a VocalWriter song are left as they are. The command line does as the
-window was last set to.
+an octave away from where their notes are. Settings > Compensate for the
+different octave of certain instruments when using GM Soundbank during
+playback and export (Ctrl+Shift+O, off until it is turned on) has the GM
+Soundbank play programs 29 - 32, 34, 36, 37, 53, 80, 86, 96, 100 and 101 an
+octave up, and 98 and 102 an octave down, counting from 0, note by note by
+the instrument each is played with, in playing and in exporting alike. The
+notes themselves stay where they are, so a MIDI file exported, or a part put
+on a SoundFont, has them as written; the drum kit is left as it is. It is for
+every track the GM Soundbank plays, a VocalWriter song's as well, which
+VocalWriter played without it. The command line does as the window was last
+set to.
 
 **Velocities** come in on every note of a MIDI file, sung or played, as
 VocalWriter took them in: the one most of a track's notes have is the
@@ -260,19 +330,25 @@ set higher, the first words take a note more each, and set lower, the words
 at the end are left off. A word not in the dictionary sings AA, and "the"
 before a vowel is "thee". A tag in square brackets, [Verse 1] or [Harp], is
 left out, while words in round ones, a backing part's, are sung. A text
-only ever goes on notes already there.
+only ever goes on notes already there. Preview, after the list, plays the
+track alone with the text on it, from the word selected on, and is Stop
+while it plays; a word changed or Notes to use set while it plays is heard
+again at once, as it is now.
 
 ## Data you supply
 
-None of the synthesisers' data is in this program. It is looked for beside the
-executable, the folder above it, the source tree, and `%SVS_DATA%` (on macOS
-also the bundle's `Contents/Resources` and the folder the `.app` sits in):
+None of the synthesisers' data is in this program, apart from DECtalk on
+Windows and the SSI-263's phoneme ROM, which are compiled in. It is looked for
+beside the executable, the folder above it, the source tree, and `%SVS_DATA%`
+(on macOS also the bundle's `Contents/Resources` and the folder the `.app`
+sits in):
 
 ```
 assets\                     VocalWriter 2.0's files, laid out as in the
                             VocalWriter repository (VocalWriter.app\...\VocalWriter.rsrc,
                             GMSpeech.rsrc, GMBank.rsrc, EnglishLex)
-voices\dectalk\             DECtalk.dll and dtalk_us.dic (scripts\build_dectalk.ps1 makes them)
+voices\dectalk\             on macOS, or a build with SVS_DECTALK_STATIC off: DECtalk's
+                            library and dtalk_us.dic (scripts\build_dectalk.ps1 makes them)
 voices\microsoft\           Sam.spd, Mike.spd, Mary.spd (any of them). Without them, the
                             installed copies are used: Common Files\SpeechEngines\Microsoft\TTS\1033
                             (the SAPI 5 voice package) or Common Files\Microsoft Shared\Speech\1033
@@ -306,10 +382,10 @@ Fred, Junior, Kathy, Princess, Ralph, Zarvox, Trinoids and Boing (MacinTalk 3),
 Agnes, Bruce and Victoria (MacinTalk Pro), Vicki, and Alex (Leopard and Snow Leopard)
 sing on Tiger, Leopard and Snow Leopard; Albert, Bahh, Bubbles, Deranged and Whisper
 sing in time, on a pitch of their own. Bad News, Bells, Cellos, Good News, Hysterical
-and Pipe Organ play their own tune whatever they are given, so they are listed and
-cannot sing. Tiger from 10.4.5 on (MacinTalk 3.4) cannot run off Apple's hardware.
+and Pipe Organ play their own tune whatever they are given, so they cannot sing and
+are not offered. Tiger from 10.4.5 on (MacinTalk 3.4) cannot run off Apple's hardware.
 
-Lion's voices are listed and cannot sing either: through Panthera, 10.7 takes a TUNE
+Lion's voices cannot sing either, and are not offered: through Panthera, 10.7 takes a TUNE
 and ignores its lengths and pitches. That looks like Panthera's host rather than Lion.
 10.7 moved the reading of TUNE into SpeechDictionary, which hands the notes to
 MacinTalk as CoreFoundation arrays of dictionaries, and the host's stand-in for
@@ -334,20 +410,24 @@ bends and glides included. The list shows one set of voices, numbered as
 Snow Leopard's are on Windows, and a song from Windows sings with the Mac's
 voice of the same name whichever generation it named. The six novelty voices
 that play their own tune (Bells, Cellos, Pipe Organ, Bad News, Good News,
-Hysterical) are listed and cannot sing, as on Windows.
+Hysterical) cannot sing and are not offered, as on Windows.
 
 On macOS DECtalk is `libtts.dylib`, built here with clang
 (`scripts/build_dectalk_mac.sh`) and kept in the bundle's `Contents/Frameworks`.
 
-The SSI-263's phoneme ROM is compiled in. An engine whose data is missing still
-lists its voices, marked "(not installed)", and says what is missing in
-Messages when the program starts.
+The SSI-263's phoneme ROM is compiled in. An engine whose data is missing is
+left out of the Engine boxes, and so is a voice that cannot sing, such as a
+MacinTalk generation whose files are not there while another's are; Messages
+says what is missing when the program starts. A track already sung by such a
+voice keeps it, marked "(not installed)", and says why when it is played.
 
 ## Build
 
 msys2's mingw64 GCC, CMake and Ninja. wxWidgets is fetched from GitHub and built
 with the program, statically, at a pinned master commit (see CMakeLists.txt), so
-the first build takes a while longer:
+the first build takes a while longer; so are Xiph's libFLAC, libogg and
+libvorbis, at pinned releases, for Export audio (cmake/xiph.cmake), and
+TinySoundFont, at a pinned commit, for the SoundFonts:
 
 ```
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
@@ -356,15 +436,25 @@ sh build.sh
 
 That gives `build\SingingVoiceStudio.exe`, the editor, and `build\svs.exe`, the
 same program as a console program. Both are linked statically and need no
-DLLs of their own. DECtalk only builds with Visual Studio, so it is built
-separately and loaded at run time:
+DLLs of their own. DECtalk is compiled into both (cmake/engines/dectalk.cmake):
+the sources, defines and settings of the "Release - ENGLISH_US" build of its
+DLL, compiled with GCC, with its scale retuned as the DLL's is, so it sings as
+the DLL does. Its US English dictionary is compiled in too, and written to the
+settings folder (`%APPDATA%\Singing Voice Studio`) for DECtalk to open. The
+dictionary is taken from `voices\dectalk\dtalk_us.dic` if it is there, which
+Visual Studio builds from DECtalk's word list:
 
 ```
-powershell -File scripts\build_dectalk.ps1
+powershell -File scripts\build_dectalk.ps1 -DictionaryOnly
 ```
 
-Or all of it at once -- DECtalk, the program, every engine's data gathered
-beside it, a check that it sings from there, and a zip:
+and otherwise from DECtalk's sources, an earlier build of the same word list.
+`-DSVS_DECTALK_STATIC=OFF` leaves DECtalk out of the program, to be loaded at
+run time as `voices\dectalk\DECtalk.dll`, which `scripts\build_dectalk.ps1`
+without `-DictionaryOnly` builds beside the dictionary.
+
+Or all of it at once -- DECtalk's dictionary, the program, every engine's data
+gathered beside it, a check that it sings from there, and a zip:
 
 ```
 powershell -ExecutionPolicy Bypass -File scripts\build_all.ps1          (add -Clean to start afresh)
@@ -375,7 +465,7 @@ which runs on any 64-bit Windows with nothing installed. It carries KAE Labs'
 and Microsoft's data, so it is for your own machines, not for publishing.
 
 `-DSVS_ENGINES="ssi263;microsoft"` (through `SVS_CMAKE_ARGS`) builds without an
-engine; its voices stay listed.
+engine; its voices are not offered, and a song that uses them keeps them.
 
 ### macOS
 
@@ -438,13 +528,17 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Enter on a track | its name, voice, volume, pan and voice controls; a backing track's file and where it starts |
 | M / S on a track | mute / solo |
 | Delete on a track | remove it, or every selected track |
+| Ctrl+A on a track | select every track |
+| Alt+Up / Alt+Down on a track | transpose every note of the selected tracks a semitone; with Shift an octave |
 | Ctrl+Up / Ctrl+Down | reorder the parts, or move a note |
 | Ctrl+W / Ctrl+N / Ctrl+R | add a word / a note / a rest, after the selected note |
 | Ctrl+Shift+W | add a word to the notes already there, from the selected one on |
 | Ctrl+Shift+X | add a text to the notes already there, from the selected one on |
 | Ctrl+Shift+R | a rest to the end of the bar |
-| Ctrl+Shift+C | add a controller: a tempo change for the entire song |
+| Ctrl+Shift+C | add a controller: a tempo or time signature change for the entire song |
 | Ctrl+E, or Enter on a note | edit it, including its pitch bend |
+| Ctrl+L | make the note the cursor is on a rest, as long and at the same pitch |
+| Application key or Shift+F10 | the Track menu on a track, the Note menu on a note, as a context menu |
 | Ctrl+D, or Delete | remove it |
 | Alt+Up / Alt+Down | transpose a semitone |
 | Alt+Right / Alt+Left | a sixteenth note longer or shorter |
@@ -466,15 +560,17 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+Shift+E | whether importing MIDI removes the note velocities from the sung tracks |
 | Ctrl+Shift+L | whether importing MIDI removes the volume changes from the sung tracks |
 | Ctrl+Shift+D | whether importing MIDI and adding a word sing a vowel held over several notes on its first sound |
-| Ctrl+Shift+O | whether importing MIDI transposes the instruments the soundbank has an octave off by an octave |
+| Ctrl+Shift+O | whether the GM Soundbank makes good the octave a few of its instruments are off by |
 | Ctrl+Shift+V | whether VocalWriter's voices are sung through its own sequencer |
-| Ctrl+Shift+S / Ctrl+Shift+T | export one WAV / one WAV per track |
+| Ctrl+Shift+K | the Soundbank manager: SoundFonts and the default soundbank |
+| Ctrl+Shift+S / Ctrl+Shift+T | export one WAV, FLAC or Ogg Vorbis file / one WAV per track |
 | Ctrl+Shift+M | export a MIDI file |
 
 ## From the command line
 
 ```
 svs song.vws -o song.wav
+svs song.vws -o song.flac
 svs tune.mid -o tune.wav --voice "DECtalk Betty" --tempo 96
 svs band.mid -o band.wav --sing-all
 svs song.vws --tracks stems
@@ -490,10 +586,11 @@ src/app/       the window, the dialogs, the command line (studio.cpp is VocalWri
                that is wxListCtrl on Windows and a native table on macOS;
                announce.cpp and announce_mac.mm speak to the screen reader)
 src/core/      the song, projects, MIDI import, phonology, settings and recovery
-src/audio/     the mixer (VocalWriter Studio's ppc/engine.py), WAV files, the player
+src/audio/     the mixer (VocalWriter Studio's ppc/engine.py), WAV, FLAC and Ogg Vorbis
+               files (encode.cpp), the player
                (player.cpp on Windows, player_mac.mm on macOS)
-src/voices/    singer.h (what an engine is asked to do), the four engines, the shared
-               pitch curve
+src/voices/    singer.h (what an engine is asked to do), the engines, the shared
+               pitch curve; soundfont.cpp plays SoundFonts through TinySoundFont
 engine/        VocalWriter's synthesiser in C (VocalWriterC)
 third_party/   DECtalk, the SSI-263, Microsoft Sam's reconstruction, nlohmann/json
 scripts/       the Windows build (build_all.ps1, build_dectalk.ps1) and the macOS

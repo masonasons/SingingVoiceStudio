@@ -68,6 +68,13 @@ private:
 void set_vocalwriter_own_path(bool on);
 bool vocalwriter_own_path();
 
+//: Whether the GM Soundbank moves the instruments it has an octave off by
+//: that octave, so that they sound where their notes are: programs 29 - 32,
+//: 34, 36, 37, 53, 80, 86, 96, 100 and 101 up, 98 and 102 down, counting from
+//: 0. Only the sound moves, not the notes. Off to begin with.
+void set_gm_octaves(bool on);
+bool gm_octaves();
+
 //: Which voice each old program number picks, for songs written down as
 //: program changes. -1 where there is none.
 std::vector<int> vocalwriter_program_voices();

@@ -73,8 +73,8 @@ struct RenderRequest {
     bool anticipate = true;
     std::vector<PartRequest> tracks;
     std::vector<BackingRequest> backings;
-    //: beats to the bar, when the metronome is wanted (never in an export)
-    std::optional<double> metronome_bar;
+    //: where the bars fall, when the metronome is wanted (never in an export)
+    std::optional<Meter> metronome;
     Clock clock() const { return {bpm, tempo_changes}; }
 };
 
@@ -96,7 +96,7 @@ struct Mixed {
     double lead = 0;
 };
 
-//: The same, written to a WAV file: an export.
+//: The same, written to a sound file: an export.
 struct RenderResult {
     bool ok = false;
     std::string error;
@@ -120,7 +120,8 @@ public:
     //: The song in memory, the metronome on it if the request asks for it.
     //: Only phrases not sung before are sung: the rest come from memory.
     Mixed mix(const RenderRequest &req);
-    //: The song written to `out`, as 16-bit PCM: what Export does.
+    //: The song written to `out`, a WAV, FLAC or Ogg Vorbis file as its name
+    //: says (write_audio): what Export does.
     //: `progress`, if given, is told how far it has got, 0 to 1, on this
     //: thread as it goes, and returns false to give it up: then nothing is
     //: written, and nothing half sung is kept.
@@ -188,10 +189,10 @@ private:
     Mixed last_;
 };
 
-//: One tick of the metronome mixed in, accented at each bar line; `start` is
-//: the beat the audio begins on, `lead` seconds into it, so the ticks stay
-//: on the song's beats.
-void with_metronome(std::vector<float> &y, int channels, const Clock &clock, double bar_beats,
+//: One tick of the metronome mixed in, accented at each bar line `meter`
+//: puts; `start` is the beat the audio begins on, `lead` seconds into it, so
+//: the ticks stay on the song's beats.
+void with_metronome(std::vector<float> &y, int channels, const Clock &clock, const Meter &meter,
                     double start, double lead = 0);
 
 }  // namespace svs

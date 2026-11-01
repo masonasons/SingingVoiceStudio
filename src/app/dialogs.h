@@ -12,6 +12,7 @@
 #include "core/project.h"
 #include "voices/controls.h"
 #include "voices/registry.h"
+#include "voices/soundfont.h"
 
 namespace svs {
 
@@ -53,7 +54,10 @@ public:
     //: Add word to existing note(s): the word goes on `existing`, the notes
     //: that sound from the cursor on, each keeping all but what it sings.
     //: `text`: Add text, words divided by spaces put on them one after another.
-    AddWordDialog(wxWindow *parent, Studio *studio, std::vector<Note> existing, bool text = false);
+    //: `spots`: where each of `existing` is in the track, for Add text's preview.
+    AddWordDialog(wxWindow *parent, Studio *studio, std::vector<Note> existing, bool text = false,
+                  std::vector<int> spots = {});
+    ~AddWordDialog() override;
     std::vector<Note> result() const { return rows_; }
 
 private:
@@ -76,10 +80,16 @@ private:
     void on_key(wxKeyEvent &evt);
     void on_edit(wxCommandEvent &);
     void on_preview(wxCommandEvent &);
+    //: Add text's Preview, or Stop while it plays
+    void on_play(wxCommandEvent &);
+    void start_play();
+    void stop_play();
+    void show_stopped();
 
     Studio *studio_;
     int pitch_;
     std::vector<Note> existing_;
+    std::vector<int> spots_;
     //: whether it is Add text, and the text's words once looked up
     bool text_ = false;
     std::vector<TextWord> words_;
@@ -88,9 +98,15 @@ private:
     std::vector<std::string> phonemes_;
     std::vector<Note> rows_;
     wxTextCtrl *word_, *beats_ = nullptr;
-    wxButton *hear_, *ok_;
+    wxButton *hear_ = nullptr, *ok_;
     wxSpinCtrl *count_;
     ReportList *list_;
+    //: Add text's preview: the button after the list, a timer that sees it
+    //: has finished, and which render is wanted, so a late one is not played
+    wxButton *play_ = nullptr;
+    wxTimer play_timer_;
+    bool playing_ = false;
+    int play_wanted_ = 0;
 };
 
 //: The curves a note carries, the bend, the mod wheel and VocalWriter's
@@ -219,9 +235,10 @@ private:
 };
 
 //: A controller: one change from where it stands in the track on, chosen
-//: first. The voice is the track's from there, any engine's; the tempo is
-//: the whole song's, whichever track it is on; or one of VocalWriter's
-//: controls, as a note carries them, of those the voice in force sings.
+//: first. The voice is the track's from there, any engine's; the tempo and
+//: the time signature are the whole song's, whichever track they are on; or
+//: one of VocalWriter's controls, as a note carries them, of those the voice
+//: in force sings.
 class ControllerDialog : public wxDialog {
 public:
     //: `voice_before`: the voice the track sings with up to the controller
@@ -239,7 +256,7 @@ private:
     std::vector<std::string> engine_names_;
     std::vector<int> ids_;      // the voices in the voice box, in order
     wxChoice *kind_, *engine_, *voice_;
-    wxTextCtrl *tempo_, *pan_;
+    wxTextCtrl *tempo_, *sig_, *pan_;
     std::vector<std::pair<const NoteControl *, wxTextCtrl *>> controls_;
     //: the fields of each kind, in the order the first box lists them
     wxBoxSizer *outer_;
@@ -278,15 +295,27 @@ private:
 };
 
 //: Which track a type 0 MIDI file's lyrics are sung on: one of `parts`,
-//: chosen in a box that starts on the first. Without `lyrics`, which track
-//: is sung in a file that has none.
+//: chosen in a box that starts on the first.
 class LyricTrackDialog : public wxDialog {
 public:
-    LyricTrackDialog(wxWindow *parent, const wxArrayString &parts, bool lyrics = true);
+    LyricTrackDialog(wxWindow *parent, const wxArrayString &parts);
     int chosen() const { return choice_->GetSelection(); }
 
 private:
     wxChoice *choice_;
+};
+
+//: Which of `parts` are sung in a MIDI file that has no lyrics, each ticked
+//: or unticked with Space, none to begin with; the others are played by the
+//: default soundbank.
+class SungPartsDialog : public wxDialog {
+public:
+    SungPartsDialog(wxWindow *parent, const wxArrayString &parts);
+    //: the parts ticked, as indices into `parts`
+    std::vector<int> chosen() const;
+
+private:
+    ReportList *list_;
 };
 
 //: Where Panthera is, for the MacinTalk voices: a folder typed in or browsed
@@ -299,6 +328,31 @@ public:
 private:
     void on_browse(wxCommandEvent &);
     wxTextCtrl *path_;
+};
+
+//: The Soundbank manager: the SoundFonts loaded, each of which plays as an
+//: engine of its own, and the default soundbank, which plays the parts of an
+//: imported MIDI file or VocalWriter song that are not sung.
+class SoundbankDialog : public wxDialog {
+public:
+    SoundbankDialog(wxWindow *parent, const std::vector<SoundFontFile> &fonts, const std::string &default_bank);
+    std::vector<SoundFontFile> fonts() const { return fonts_; }
+    //: a SoundFont's path, or empty for the GM Soundbank
+    std::string default_soundbank() const;
+
+private:
+    void fill(int select);
+    void on_load(wxCommandEvent &);
+    void on_remove(wxCommandEvent &);
+    //: Remove only while a SoundFont in the list is selected
+    void show_remove();
+    std::vector<SoundFontFile> fonts_;
+    std::vector<SoundFontInfo> infos_;
+    std::string default_;
+    ReportList *list_;
+    wxButton *remove_;
+    wxButton *load_;
+    wxChoice *bank_;
 };
 
 //: Which MIDI channel each track goes out on, asked before a MIDI export as
@@ -343,8 +397,8 @@ private:
     std::vector<std::pair<const VoiceControl *, wxSpinCtrl *>> voice_ctrls_;
 };
 
-//: A backing track's name, its file, where in the song the file starts, and
-//: its volume and pan.
+//: A backing track's name, its file, where in the song the file starts, in
+//: beats, and its volume and pan.
 class BackingDialog : public wxDialog {
 public:
     BackingDialog(wxWindow *parent, const Track &track);
@@ -356,6 +410,8 @@ private:
     std::string file() const;
     wxTextCtrl *name_, *path_, *start_;
     wxSpinCtrl *volume_, *pan_;
+    double was_start_;
+    wxString start_shown_;
 };
 
 }  // namespace svs

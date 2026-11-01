@@ -78,6 +78,11 @@ public:
     void OnActivated(std::function<void()> fn);
     void OnSelected(std::function<void()> fn);
     void OnKey(std::function<void(wxKeyEvent &)> fn);
+    //: What the window does when a context menu is asked for: the
+    //: application key, Shift+F10 or a right click. `at` is where in the
+    //: list it goes: below the row the keyboard is on when the keyboard
+    //: asked, or wxDefaultPosition for where the mouse is.
+    void OnContextMenu(std::function<void(wxPoint at)> fn);
 
     //: A box to tick on every row, ticked and unticked with Space. Called
     //: before the columns are added.
