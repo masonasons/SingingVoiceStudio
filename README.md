@@ -140,18 +140,27 @@ above whose name says it is a kit ("drum", "kit" or "perc"): a SoundFont may
 have several. A drum kit's notes are shown by the drum, as General MIDI
 places them, and are left as they are when a track is transposed. A
 SoundFont plays as the GM Soundbank does -- chords, held notes, velocities,
-the bend, the detune and the sustain pedal, the volume and the pan in the mix
--- in stereo. The last box, Default soundbank, says what plays the parts of a
-MIDI file or a VocalWriter song that are not sung when it is imported: GM
+the bend, the detune, the sustain pedal and the volume, and the pan in the mix
+-- in stereo. It is played as the SoundFont players play it, VirtualMidiSynth
+and FluidSynth among them, which TinySoundFont alone does not: each preset's
+own attenuation at 0.4 of what the SoundFont 2 specification gives, as E-mu's
+own cards had it, and the velocity and the volume as the specification has
+them, 40 log10(value / 127) dB, so a note at half the velocity, or under a
+volume control at half, is 12 dB down. The track's volume, which is where a
+MIDI file's CC 7 by CC 11 comes in, is taken the same way: a track at 50% is
+12 dB down, where for the other engines it is 6 dB.
+
+The Soundbank manager's last box, Default soundbank, says what plays the parts
+of a MIDI file or a VocalWriter song that are not sung when it is imported: GM
 Soundbank (built-in), or one of the SoundFonts, which then plays each part
-with its preset in bank 0 of the part's program, failing that the same
-program in another bank, and the drums with its kit at program 0 in bank 128,
-failing that any kit; a part it has nothing for stays on the GM Soundbank.
-Instruments an octave off (below) are the GM Soundbank's own, so a SoundFont's
-parts are not moved. The SoundFonts' paths and the default soundbank are kept
-in the settings file, with the other settings, not in the song; the command
-line uses them as the window left them. A SoundFont's samples are read when
-one of its voices first plays.
+with its preset in bank 0 of the part's program, failing that the same program
+in another bank, and the drums with its kit at program 0 in bank 128, failing
+that any kit; a part it has nothing for stays on the GM Soundbank. Instruments
+an octave off (below) are the GM Soundbank's own, so a SoundFont's parts are
+not moved. The SoundFonts' paths and the default soundbank are kept in the
+settings file, with the other settings, not in the song; the command line uses
+them as the window left them. A SoundFont's samples are read when one of its
+voices first plays.
 
 **VocalWriter's own songs** (.trk) open with File > Import (Ctrl+I) or on the
 command line. Each vocal track comes in as a part with everything VocalWriter

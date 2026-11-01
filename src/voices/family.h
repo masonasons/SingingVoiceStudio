@@ -65,9 +65,9 @@ bool is_drum_kit(int id);
 //: Whether a voice hears velocity as more than loudness: VocalWriter's and
 //: the instruments do.
 inline bool uses_velocity(int id) { return is_vocalwriter_voice(id) || is_instrument(id); }
-//: Whether an engine follows VocalWriter's volume control itself; for the
-//: others the mix does.
-inline bool sings_volume(int id) { return is_vocalwriter_voice(id) || is_gm_voice(id); }
+//: Whether an engine follows VocalWriter's volume control itself (a
+//: SoundFont as MIDI's channel volume); for the others the mix does.
+inline bool sings_volume(int id) { return is_vocalwriter_voice(id) || is_instrument(id); }
 //: The General MIDI name of a program, 0-127: "Acoustic Grand Piano".
 const char *gm_program_name(int program);
 //: The General MIDI name of the drum on a key, 35 to 81, or null.

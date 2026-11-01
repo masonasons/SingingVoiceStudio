@@ -2,8 +2,11 @@
 //
 // A part is played as a MIDI channel would play it: each note on at its beat
 // and off when it has sounded for its beats, or its hold; the instrument
-// changes, the pedal, the detune and the bend at their moments. The volume
-// and the pan are the mix's, as they are for every engine but VocalWriter's.
+// changes, the volume, the pedal, the detune and the bend at their moments.
+// The pan is the mix's. The presets' attenuation, the velocity and the volume
+// are taken as the SoundFont players take them (tinysoundfont.h), which
+// TinySoundFont alone does not, and so is the track's volume, where a MIDI
+// file's CC 7 by CC 11 comes in.
 #include "voices/soundfont.h"
 
 #include <algorithm>
@@ -16,7 +19,7 @@
 #include <mutex>
 
 #include "core/paths.h"
-#include "tsf.h"
+#include "voices/tinysoundfont.h"
 
 namespace svs {
 
@@ -194,7 +197,7 @@ public:
         tsf_channel_set_presetindex(f_, ch, first);
 
         // everything that happens, in seconds from the part's start
-        enum Kind { kPreset, kSustain, kTuning, kWheel, kOff, kOn };
+        enum Kind { kPreset, kVolume, kSustain, kTuning, kWheel, kOff, kOn };
         struct Ev {
             double t;
             Kind kind;
@@ -208,7 +211,11 @@ public:
         // way, and four on a drum kit's track.
         const int detune_shift = is_drum_kit(voice_) ? 6 : 8;
         auto control = [&](double t, const std::string &name, double value) {
-            if (name == "sustain") {
+            if (name == "volume") {
+                // as MIDI's channel volume: 40 log10(value / 127) dB
+                double v = std::max(0.0, std::min(127.0, value)) / 127.0;
+                ev.push_back({t, kVolume, 0, v * v});
+            } else if (name == "sustain") {
                 ev.push_back({t, kSustain, 0, value});
             } else if (name == "detune") {
                 long v = std::max(-8192L, std::min(8191L, std::lround(value)));
@@ -234,7 +241,7 @@ public:
                 for (size_t k = i + 1; len <= 0 && k < part.notes.size(); ++k) len = part.notes[k].beats;
                 double on = seconds(beat), off = std::max(seconds(beat + len), on + 0.01);
                 int key = std::max(0, std::min(127, n.midi));
-                ev.push_back({on, kOn, key, std::max(1, std::min(127, n.velocity)) / 127.0});
+                ev.push_back({on, kOn, key, double(std::max(1, std::min(127, n.velocity)))});
                 ev.push_back({off, kOff, key, 0});
                 last = std::max(last, off);
             }
@@ -274,12 +281,13 @@ public:
             if (!render(size_t(std::max(0L, std::lround(e.t * kSampleRate))))) return out;
             switch (e.kind) {
             case kPreset: tsf_channel_set_presetindex(f_, ch, e.a); break;
+            case kVolume: tsf_channel_set_volume(f_, ch, float(e.v)); break;
             case kSustain: tsf_channel_set_sustain(f_, ch, e.v >= 64); break;
             case kTuning: tsf_channel_set_tuning(f_, ch, float(e.v)); break;
             case kWheel: tsf_channel_set_pitchwheel(f_, ch, e.a); break;
             case kOn:
                 ++down[e.a];
-                tsf_channel_note_on(f_, ch, e.a, float(e.v));
+                svs_tsf_note_on(f_, ch, e.a, int(e.v));
                 break;
             case kOff:
                 if (--down[e.a] <= 0) tsf_channel_note_off(f_, ch, e.a);
@@ -293,8 +301,9 @@ public:
         size_t limit = done + size_t(10 * kSampleRate);
         while (tsf_active_voice_count(f_) > 0 && done < limit)
             if (!render(done + 1024)) return out;
+        // the track's volume as MIDI's channel volume, as the volume control
         if (part.level != 1.0)
-            for (float &s : out.samples) s = float(s * part.level);
+            for (float &s : out.samples) s = float(s * part.level * part.level);
         return out;
     }
 
@@ -356,6 +365,7 @@ public:
                 if (err) *err = load_error_;
                 return nullptr;
             }
+            svs_tsf_attenuation(base);
             font_ = std::make_shared<Font>();
             font_->base = base;
         }
