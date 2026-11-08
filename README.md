@@ -3,16 +3,20 @@
 VocalWriter Studio rebuilt in C++ and wxWidgets, with more singers in it, for
 Windows and macOS. The window, the menus, the keys, the dialogs, the messages
 and the project files are derived from VocalWriter Studio; what is new is that a track can be sung by any of
-five synthesisers, or played by VocalWriter's own General MIDI instruments or
+nine synthesisers, or played by VocalWriter's own General MIDI instruments or
 by SoundFonts:
 
 | engine | voices | numbers | what it is |
 |---|---|---|---|
 | **VocalWriter 2.0** (KAE Labs, 2005) | 87, the bank's own | 0 - 86 | the original's PowerPC code lifted into C (`engine/`, VocalWriterC) |
 | **DECtalk** | Paul, Betty, Harry, Frank, Dennis, Kit, Ursula, Rita, Wendy | 1000 - 1008 | github.com/dectalk/dectalk, sung through its phoneme `<duration,pitch>` notation |
-| **SSI-263** | SSI-263, Deep, Bright, Child | 2000 - 2003 | the chip itself, driven at register level (github.com/tgeczy/ssi263-speech) |
+| **SSI-263** | Standard, Deep, Bright, Child | 2000 - 2003 | the chip itself, driven at register level (github.com/tgeczy/ssi263-speech) |
 | **Microsoft** | Sam, Mike, Mary, each plain, in Hall, in Stadium, in Space, Whisper, RoboSoft One to Six | 3000 - 3050 | the SAPI 5 engine rebuilt in C, with the SAPI 4 voice modes (github.com/KamiKitsune420/ms-sam-mike-mary-decomp) |
 | **MacinTalk** | Agnes, Albert, Bad News, Bahh, Bells, Boing, Bruce, Bubbles, Cellos, Deranged, Fred, Good News, Hysterical, Junior, Kathy, Pipe Organ, Princess, Ralph, Trinoids, Vicki, Victoria, Whisper, Zarvox, from each of Mac OS X 10.4 Tiger, 10.5 Leopard, 10.6 Snow Leopard and 10.7 Lion, and Alex from 10.5 on | 4000 - 4022, 4100 - 4123, 4200 - 4223, 4300 - 4323 | Apple's own engines: on Windows run by Panthera's host (github.com/tgeczy/panthera-speech) and sung through Apple's TUNE notation; on a Mac the system's own voices, spoken from phonemes and retuned to the score (see below) |
+| **Eloquence** | Reed, Shelley, Bobby, Rocko, Glen, Sandy, Grandma, Grandpa | 5000 - 5007 | Eloquent Technology's formant synthesiser, later IBM's ViaVoice TTS, the voice of JAWS, its US English reimplemented in C (github.com/Mudb0y/openevv), compiled in; its frames are laid out again to the notes and synthesised by its own Klatt synthesiser (not on macOS) |
+| **BeSTspeech** | BeSTspeech 1 to 6 | 6000 - 6005 | Berkeley Speech Technologies' diphone synthesiser of HumanWare's Keynote GOLD, its 1995 English build reimplemented in C (github.com/Mudb0y/openbst), compiled in; its frames are laid out again to the notes, one pitch period at a time |
+| **Prose 2000** | Standard, Deep, High | 7000 - 7002 | Speech Plus's text-to-speech board of 1988, its v3.4.1 firmware decompiled into C with a model of its DSP (github.com/rommix0/prose2000_reborn), compiled in; its frames are laid out again to the notes and synthesised by its own frame builder and DSP model |
+| **SharpVox** | Paul, Beth, Chris, Deborah, Jack, Jess, John, Matt, Pirate, Tommy, Whisper | 8000 - 8010 | a Klatt formant synthesiser with DECtalk's phonemes (github.com/dectalk/SharpVoxTTS), compiled in and sung through its singing layer with the shared pitch curve in every frame |
 | **GM Soundbank** | the 128 General MIDI instruments and a drum kit | 100000 - 100127, 100128 | VocalWriter 2.0's own instrument bank and wavetable synthesiser, which played its MIDI tracks (see below) |
 | **SoundFonts** | every preset of each SoundFont (.sf2) loaded, up to a thousand | 101000 - 101999 for the first, 102000 - 102999 for the next, and so on | played by TinySoundFont (github.com/schellingb/TinySoundFont), compiled in (see below) |
 
@@ -42,7 +46,11 @@ saved here is the same file byte for byte as VocalWriter Studio's. The other eng
 and one shared pitch curve (written note, bend, detune, portamento, vibrato),
 each in its own terms: DECtalk a pitch per phoneme in Hz, the SSI-263 its
 inflection register every 32 samples, Microsoft's vocoder twenty pitch knots
-per acoustic unit. A new song, and one imported from MIDI, starts with the
+per acoustic unit, SharpVox a pitch in every 5 ms frame, BeSTspeech a pitch
+period in sixteenths of a sample on every one of its frames, Eloquence a whole
+period in every 5 ms frame and the Prose 2000 one in every 10 ms frame, both
+retuned to the curve afterwards. A new song, and one imported from MIDI,
+starts with the
 portamento and reverb VocalWriter's own songs have: a portamento of 40, and
 reverb room 40 at 24 per cent.
 
@@ -70,6 +78,14 @@ same moment; Export audio includes it, Export tracks leaves it out (it is a file
 already). The project saves where the file is; a project sent along with its
 file in the same folder finds it there. VocalWriter Studio reads such a
 project too, the backing track as a part with no notes.
+A song with no name yet is named after the backing track added to it, as an
+imported song is after its file. A sound file opened from Explorer or on the
+command line starts a new song named after it, the file on a backing track
+under Voice 1; a file of any other kind the program does not open is said so
+in a box, as a MIDI file or VocalWriter song that cannot be read is. A sound
+file is known by how it begins as well as by its name, so one that is not
+what its name says, a program renamed to .flac, is refused in the same way,
+and Add backing track and the backing track's own window refuse it too.
 
 **A controller** (Note > Add controller, Ctrl+Shift+C) is a row among the
 notes that takes no time and is sung by nobody: a change from where it stands
@@ -222,7 +238,9 @@ several notes that VocalWriter's dictionary does not know is sung as its
 pieces, if it knows each of them and none is shorter than three letters: "jail-", "birds" as jail and birds, rather than
 the letter-to-sound rules' guess at jailbirds. A letter on its own but "a" is
 its name, "D J" as d IY, JH EY, here and in Add word, and "the" before a word
-that starts with a vowel is DH IY.
+that starts with a vowel is DH IY. The consonants between two syllables open
+the second as far as a syllable can begin with them, and the rest close the
+first: "al-", "right" is AO LX, r AY t, and "coun-", "try" k UX n, t r IY.
 
 **Append MIDI** (File > Append MIDI, Ctrl+Shift+A) puts the parts of a MIDI
 file under the song's own tracks, chosen as Import chooses them; its tempo
@@ -233,7 +251,11 @@ to one file, a WAV, a FLAC or an Ogg Vorbis file, as chosen in the file box
 or by the name's ending; the kind chosen last is chosen again next time. A
 FLAC holds exactly the 16-bit samples the WAV would, and Ogg Vorbis is
 written at quality 6, about 190 kbit/s in stereo. The command line writes
-whichever the name given to `-o` ends in. Export tracks writes WAVs.
+whichever the name given to `-o` ends in. Export tracks (Ctrl+Shift+T) asks
+for the kind of file first, the same three and the same one to begin with,
+then for the folder, and writes each track there as one; a window shows how
+far it has got and can give it up, and it ends with the same sound. On the
+command line, `--tracks` writes WAVs.
 
 **Export MIDI** (File > Export MIDI, Ctrl+Shift+M) writes the song as a
 type 1 Standard MIDI File, as VocalWriter's own File > Export did: 240 ticks
@@ -324,7 +346,8 @@ looks it up, Shift+Enter begins a new line): each word is looked up and
 given its notes one after another, as many as its hyphens or syllables ask,
 and the list shows the words, each with its phonemes and its notes. Enter on
 one opens its Phonemes and its Notes to use, and Notes to use above the
-list follows, the notes of every word added up. That starts on what they
+list follows, the notes of every word added up; Delete takes it out, and the
+words after it move back onto its notes. That starts on what they
 come to, no more than there are from the cursor to the end of the track;
 set higher, the first words take a note more each, and set lower, the words
 at the end are left off. A word not in the dictionary sings AA, and "the"
@@ -338,7 +361,9 @@ again at once, as it is now.
 ## Data you supply
 
 None of the synthesisers' data is in this program, apart from DECtalk on
-Windows and the SSI-263's phoneme ROM, which are compiled in. It is looked for
+Windows and the SSI-263's phoneme ROM, which are compiled in. SharpVox needs no
+data at all, and BeSTspeech's tables, Eloquence's language and the Prose 2000's
+ROM are compiled in. The rest is looked for
 beside the executable, the folder above it, the source tree, and `%SVS_DATA%`
 (on macOS also the bundle's `Contents/Resources` and the folder the `.app`
 sits in):
@@ -430,9 +455,13 @@ libvorbis, at pinned releases, for Export audio (cmake/xiph.cmake), and
 TinySoundFont, at a pinned commit, for the SoundFonts:
 
 ```
-pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-python git
 sh build.sh
 ```
+
+Python 3 is for Eloquence, whose build writes its rules and dictionary out of
+their text with its own tools (cmake/engines/eloquence.cmake); `-DSVS_ENGINES`
+without `eloquence` builds without it, and without Python.
 
 That gives `build\SingingVoiceStudio.exe`, the editor, and `build\svs.exe`, the
 same program as a console program. Both are linked statically and need no
@@ -530,6 +559,8 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Delete on a track | remove it, or every selected track |
 | Ctrl+A on a track | select every track |
 | Alt+Up / Alt+Down on a track | transpose every note of the selected tracks a semitone; with Shift an octave |
+| Ctrl+Shift+Up / Ctrl+Shift+Down on a track | the volume of the selected tracks 1 per cent up or down |
+| Ctrl+Shift+Right / Ctrl+Shift+Left on a track | the pan of the selected tracks 1 to the right or left |
 | Ctrl+Up / Ctrl+Down | reorder the parts, or move a note |
 | Ctrl+W / Ctrl+N / Ctrl+R | add a word / a note / a rest, after the selected note |
 | Ctrl+Shift+W | add a word to the notes already there, from the selected one on |
@@ -563,7 +594,7 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+Shift+O | whether the GM Soundbank makes good the octave a few of its instruments are off by |
 | Ctrl+Shift+V | whether VocalWriter's voices are sung through its own sequencer |
 | Ctrl+Shift+K | the Soundbank manager: SoundFonts and the default soundbank |
-| Ctrl+Shift+S / Ctrl+Shift+T | export one WAV, FLAC or Ogg Vorbis file / one WAV per track |
+| Ctrl+Shift+S / Ctrl+Shift+T | export one WAV, FLAC or Ogg Vorbis file / one per track |
 | Ctrl+Shift+M | export a MIDI file |
 
 ## From the command line
@@ -592,7 +623,8 @@ src/audio/     the mixer (VocalWriter Studio's ppc/engine.py), WAV, FLAC and Ogg
 src/voices/    singer.h (what an engine is asked to do), the engines, the shared
                pitch curve; soundfont.cpp plays SoundFonts through TinySoundFont
 engine/        VocalWriter's synthesiser in C (VocalWriterC)
-third_party/   DECtalk, the SSI-263, Microsoft Sam's reconstruction, nlohmann/json
+third_party/   DECtalk, the SSI-263, Microsoft Sam's reconstruction, SharpVox,
+               BeSTspeech, Eloquence, the Prose 2000, nlohmann/json
 scripts/       the Windows build (build_all.ps1, build_dectalk.ps1) and the macOS
                build (build_mac.sh, build_dectalk_mac.sh)
 tests/engines/ a standalone sing test for each engine
@@ -601,6 +633,12 @@ tests/engines/ a standalone sing test for each engine
 ## Licences
 
 The code here is MIT, as VocalWriter Studio's is. VocalWriter 2.0 and its data
-are KAE Labs'; DECtalk, the SSI-263 emulation and the Sam reconstruction carry
-their own licences in `third_party/`. Microsoft's voice files are Microsoft's
+are KAE Labs'; DECtalk, the SSI-263 emulation, the Sam reconstruction, SharpVox,
+openbst and OpenEVV carry their own licences in `third_party/`, and BeSTspeech's
+tables, compiled in from openbst, are Berkeley Speech Technologies' and later
+HumanWare's (see its LICENSE), and Eloquence's US English, compiled in from
+OpenEVV, IBM's (see its NOTICE). Prose 2000 Reborn states no licence of its own
+and is used with its author's permission, and the Prose 2000's firmware and ROM
+data it is decompiled from are Speech Plus's and Telesensory Systems'.
+Microsoft's voice files are Microsoft's
 and are not included.

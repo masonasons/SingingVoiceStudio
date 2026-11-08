@@ -15,6 +15,10 @@ Registry::Registry() {
     families_.push_back(make_ssi263_family());
     families_.push_back(make_microsoft_family());
     families_.push_back(make_macintalk_family());
+    families_.push_back(make_eloquence_family());
+    families_.push_back(make_bestspeech_family());
+    families_.push_back(make_prose_family());
+    families_.push_back(make_sharpvox_family());
     families_.push_back(make_gm_family());
 }
 
@@ -65,6 +69,10 @@ Family *Registry::family_of(int voice_id) {
         if (base == kSsi263Base && f->name() == "SSI-263") return f.get();
         if (base == kMicrosoftBase && f->name() == "Microsoft") return f.get();
         if (base == kMacinTalkBase && f->name() == "MacinTalk") return f.get();
+        if (base == kEloquenceBase && f->name() == "Eloquence") return f.get();
+        if (base == kBestBase && f->name() == "BeSTspeech") return f.get();
+        if (base == kProseBase && f->name() == "Prose 2000") return f.get();
+        if (base == kSharpVoxBase && f->name() == "SharpVox") return f.get();
         if (base == kGmBase && f->name() == "GM Soundbank") return f.get();
     }
     return nullptr;
@@ -138,8 +146,11 @@ static bool by_name(std::optional<int> &id, const std::optional<std::string> &na
 }
 
 //: A voice no longer offered, put on the one it sounded as: DECtalk's Val is
-//: where DECtalk keeps a voice of the user's own, and was only Paul.
+//: where DECtalk keeps a voice of the user's own, and was only Paul. A voice
+//: renamed since is given its new name: the SSI-263's first voice, once
+//: "SSI-263", is Standard.
 static bool retired(std::optional<int> &id, std::optional<std::string> &name) {
+    if (name && *name == "SSI-263") name = "SSI-263 Standard";
     if (!(id && *id == kDectalkBase + 9) && !(name && *name == "DECtalk Val")) return false;
     id = kDectalkBase;
     name = "DECtalk Paul";

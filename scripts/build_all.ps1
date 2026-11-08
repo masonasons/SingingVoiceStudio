@@ -168,6 +168,10 @@ $lic = @{
     "third_party\ssi263-speech\LICENSE" = "licenses\SSI-263.txt";
     "third_party\ssi263-speech\third_party\casso\LICENSE" = "licenses\SSI-263 Casso.txt";
     "third_party\ms-sam-mike-mary-decomp\LICENSE" = "licenses\Microsoft Sam reconstruction.txt";
+    "third_party\SharpVoxTTS\LICENSE" = "licenses\SharpVox.txt";
+    "third_party\openbst\LICENSE" = "licenses\openbst (BeSTspeech).txt";
+    "third_party\openevv\LICENSE" = "licenses\OpenEVV (Eloquence).txt";
+    "third_party\openevv\NOTICE" = "licenses\OpenEVV (Eloquence) NOTICE.txt";
     "engine\README.md" = "licenses\VocalWriterC README.md"
 }
 foreach ($k in $lic.Keys) {
@@ -191,7 +195,7 @@ $status = & (Join-Path $Out "svs.exe") --version
 Remove-Item Env:SVS_ONLY_BESIDE
 $status | ForEach-Object { Write-Host "   $_" }
 foreach ($line in $status) {
-    if ($line -match "^(VocalWriter|DECtalk|SSI-263|Microsoft|GM Soundbank): " -and $line -notmatch "voices ready") {
+    if ($line -match "^(VocalWriter|DECtalk|SSI-263|Microsoft|SharpVox|BeSTspeech|Eloquence|Prose 2000|GM Soundbank): " -and $line -notmatch "voices ready") {
         Warn "engine not ready: $line"
     }
     # MacinTalk's data is the user's own (Panthera's), never in the zip, so it

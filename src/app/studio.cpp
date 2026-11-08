@@ -13,6 +13,7 @@
 #include <wx/filedlg.h>
 #include <wx/progdlg.h>
 #include <wx/textdlg.h>
+#include <wx/tokenzr.h>
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -48,7 +49,7 @@ enum {
     ID_REMOVE_VELOCITIES, ID_APPEND, ID_OWN_PATH, ID_PLAIN_HELD, ID_FOLLOW, ID_FOLLOW_TIMER, ID_EXPORT_TIMER,
     ID_EXPORT_MIDI, ID_ADD_WORD_EXISTING, ID_OCTAVE_INSTRUMENTS, ID_ADD_TEXT, ID_REMOVE_VOLUMES,
     ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN, ID_SOUNDBANKS,
-    ID_NOTE_TO_REST,
+    ID_NOTE_TO_REST, ID_TRACK_LOUDER, ID_TRACK_QUIETER, ID_TRACK_PAN_LEFT, ID_TRACK_PAN_RIGHT,
 };
 
 //: A beat is a quarter note, so a sixteenth is a quarter of a beat: the step
@@ -57,6 +58,10 @@ const double kSixteenth = 0.25;
 //: A nudge will not take a note below a thirty-second note. The floor only
 //: refuses; it never shortens the step to fit.
 const double kMinBeats = 0.125;
+//: the steps Ctrl+Shift and the arrows move a track's volume by, in per
+//: cent, and its pan by
+const int kVolumeStep = 1;
+const int kPanStep = 1;
 //: how long the song has to stop changing before a copy is kept
 const int kRecoveryWait = 2500;
 //: how long the nudging has to stop before a note is previewed
@@ -399,6 +404,15 @@ wxMenu *Studio::track_menu() {
                   "Every note of the selected tracks up twelve semitones");
     track->Append(ID_TRACK_OCTAVE_DOWN, K("Down an octa&ve (Alt+Shift+Down on a track)"),
                   "Every note of the selected tracks down twelve semitones");
+    track->AppendSeparator();
+    track->Append(ID_TRACK_LOUDER, K("&Louder (Ctrl+Shift+Up on a track)"),
+                  W("The selected tracks' volume up " + std::to_string(kVolumeStep) + " per cent"));
+    track->Append(ID_TRACK_QUIETER, K("&Quieter (Ctrl+Shift+Down on a track)"),
+                  W("The selected tracks' volume down " + std::to_string(kVolumeStep) + " per cent"));
+    track->Append(ID_TRACK_PAN_RIGHT, K("Pan ri&ght (Ctrl+Shift+Right on a track)"),
+                  W("The selected tracks' pan " + std::to_string(kPanStep) + " to the right"));
+    track->Append(ID_TRACK_PAN_LEFT, K("Pan l&eft (Ctrl+Shift+Left on a track)"),
+                  W("The selected tracks' pan " + std::to_string(kPanStep) + " to the left"));
     return track;
 }
 
@@ -547,6 +561,10 @@ void Studio::build_menu() {
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(-kSemitone); }, ID_TRACK_TRANSPOSE_DOWN);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(kOctave); }, ID_TRACK_OCTAVE_UP);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(-kOctave); }, ID_TRACK_OCTAVE_DOWN);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { nudge_tracks(kVolumeStep, 0); }, ID_TRACK_LOUDER);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { nudge_tracks(-kVolumeStep, 0); }, ID_TRACK_QUIETER);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { nudge_tracks(0, kPanStep); }, ID_TRACK_PAN_RIGHT);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { nudge_tracks(0, -kPanStep); }, ID_TRACK_PAN_LEFT);
     on(ID_PANES, &Studio::on_panes);
     on(ID_PLAY, &Studio::on_play);
     on(ID_PLAY_PAUSE, &Studio::on_play_stop);
@@ -885,10 +903,13 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+Up or Ctrl+Down on a track  reorder the parts",
         "Alt+Up or Alt+Down on a track  transpose every note of the selected tracks a semitone, Alt+Shift+Up or "
         "Alt+Shift+Down an octave",
+        "Ctrl+Shift+Up or Ctrl+Shift+Down on a track  the volume of the selected tracks 1 per cent up or down, "
+        "Ctrl+Shift+Right or Ctrl+Shift+Left  their pan 1 to the right or left",
         "Ctrl+A on a track  select every track",
         "Ctrl+W  add a word after the selected note, or at the end",
         "Ctrl+Shift+W  add a word to the notes already there, from the selected one on",
-        "Ctrl+Shift+X  add a text, words divided by spaces, to the notes already there, from the selected one on",
+        "Ctrl+Shift+X  add a text, words divided by spaces, to the notes already there, from the selected one on. "
+        "In its list of words Enter opens a word, and Delete takes it out, the words after it moving back onto its notes",
         "Ctrl+N  add a note after the selected note, or at the end",
         "Ctrl+R  add a rest, a silent break",
         "Ctrl+Shift+R  rest to the end of the bar",
@@ -942,7 +963,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+Shift+V  whether VocalWriter's voices are sung through its own sequencer, sample for sample as "
         "VocalWriter 2.0 sang them, or phrase by phrase as the other engines sing",
         "Ctrl+Shift+S  export the whole song as one WAV, FLAC or Ogg Vorbis file",
-        "Ctrl+Shift+T  export every track to its own WAV",
+        "Ctrl+Shift+T  export every track to its own WAV, FLAC or Ogg Vorbis file",
         "Ctrl+Shift+M  export the song as a MIDI file, as VocalWriter did: the channels are asked first",
         "Enter on a note edits it",
     };
@@ -1114,9 +1135,13 @@ void Studio::on_track_chosen() {
 void Studio::on_track_key(wxKeyEvent &evt) {
     int code = evt.GetKeyCode();
     bool plain = !(evt.ControlDown() || evt.AltDown() || evt.ShiftDown());
+    bool arrow = code == WXK_UP || code == WXK_DOWN || code == WXK_LEFT || code == WXK_RIGHT;
     wxCommandEvent e;
     if (evt.AltDown() && !evt.ControlDown() && (code == WXK_UP || code == WXK_DOWN))
         transpose_tracks((code == WXK_UP ? 1 : -1) * (evt.ShiftDown() ? kOctave : kSemitone));
+    else if (evt.ControlDown() && evt.ShiftDown() && !evt.AltDown() && arrow)
+        nudge_tracks(code == WXK_UP ? kVolumeStep : code == WXK_DOWN ? -kVolumeStep : 0,
+                     code == WXK_RIGHT ? kPanStep : code == WXK_LEFT ? -kPanStep : 0);
     else if (evt.ControlDown() && (code == WXK_UP || code == WXK_DOWN))
         move_tracks(code == WXK_UP ? -1 : 1);
     else if (evt.ControlDown() && !evt.ShiftDown() && !evt.AltDown() && code == 'A')
@@ -1190,6 +1215,38 @@ void Studio::transpose_tracks(int by) {
     });
 }
 
+//: Ctrl+Shift with Up and Down on a track, its volume a step up or down,
+//: and with Right and Left its pan a step to the right or left: every
+//: selected track, or the one the keyboard is on.
+void Studio::nudge_tracks(int volume, int pan) {
+    undoable(volume ? "change track volume" : "change track pan", [&] {
+        std::vector<int> rows;
+        for (int r : tracks_list_->SelectedRows())
+            if (r >= 0 && r < int(song_.tracks.size())) rows.push_back(r);
+        if (rows.empty()) rows = {track_at()};
+        size_t moved = 0;
+        for (int r : rows) {
+            Track &t = song_.tracks[size_t(r)];
+            int was_volume = t.volume, was_pan = t.pan;
+            t.volume = std::max(0, std::min(kMaxVolume, t.volume + volume));
+            t.pan = std::max(-100, std::min(100, t.pan + pan));
+            if (t.volume == was_volume && t.pan == was_pan) continue;
+            ++moved;
+            refresh_track(r);
+        }
+        const Track &t = song_.tracks[size_t(track_at())];
+        std::string now = volume ? "volume " + std::to_string(t.volume) + " per cent" : "pan " + pan_text(t.pan);
+        if (!moved) {
+            announce_note(W(now + ", as far as it goes"), tracks_list_, track_at());
+            return;
+        }
+        touch();
+        std::string how = volume ? std::to_string(std::abs(volume)) + " per cent " + (volume > 0 ? "louder" : "quieter")
+                                 : std::to_string(std::abs(pan)) + " to the " + (pan > 0 ? "right" : "left");
+        announce_note(W(rows.size() == 1 ? now : plural(moved, "track") + " " + how), tracks_list_, track_at());
+    });
+}
+
 //: The track the keyboard is on, when several are selected; else the
 //: selected one, else the one the notes list shows.
 int Studio::track_at() const {
@@ -1247,12 +1304,15 @@ void Studio::on_track_backing(wxCommandEvent &) {
     undoable("add backing track", [&] {
         wxFileDialog pick(this, "Backing track", "", "", kAudioWildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (pick.ShowModal() != wxID_OK) return;
-        Track t;
-        t.audio = U(pick.GetPath());
-        t.name = base_name(strip_extension(t.audio));
-        // a finished recording is far louder than a voice singing alone
-        t.volume = 50;
+        std::string why;
+        if (!probe_audio(U(pick.GetPath()), &why)) {
+            cannot_load(U(pick.GetPath()), why);
+            return;
+        }
+        Track t = backing_track(U(pick.GetPath()));
         song_.tracks.insert(song_.tracks.begin() + current_ + 1, t);
+        // a song with no name yet is named after it, as after an import
+        if (path_.empty() && import_name_.empty()) import_name_ = t.name;
         touch();
         sync_tracks(current_ + 1);
         sync();
@@ -2189,13 +2249,18 @@ std::shared_ptr<const std::vector<float>> Studio::ticked(const Mixed &res) const
     return y;
 }
 
-void Studio::render(const RenderRequest &req, const std::string &out, std::function<void(RenderResult)> done) {
+//: The song written to `out` on the worker, with `progress` told how far it
+//: has got (Mixer::render).
+void Studio::render(const RenderRequest &req, const std::string &out, std::function<bool(double)> progress,
+                    std::function<void(RenderResult)> done) {
     std::shared_ptr<Mixer> mixer = mixer_;
-    worker_->ask<RenderResult>([mixer, req, out] { return mixer->render(req, out); },
+    worker_->ask<RenderResult>([mixer, req, out, progress] { return mixer->render(req, out, progress); },
                                [this, done](RenderResult res) {
                                    // a failed render still has to come back, or
-                                   // whatever asked would wait for ever
-                                   if (!res.ok && !res.error.empty()) say("engine error: " + W(res.error));
+                                   // whatever asked would wait for ever; one
+                                   // given up is said by whatever asked
+                                   if (!res.ok && !res.cancelled && !res.error.empty())
+                                       say("engine error: " + W(res.error));
                                    done(res);
                                });
 }
@@ -2462,16 +2527,7 @@ void Studio::on_export(wxCommandEvent &) {
         save_settings(settings_);
     }
     say(W("rendering to " + base_name(path)));
-    // A window that stays until the file is written, so the program is not
-    // closed under it, and that can give the export up.
-    rendering_ = true;
-    mi_play_->Enable(false);
-    auto cancel = std::make_shared<std::atomic<bool>>(false);
-    export_cancel_ = cancel;
-    export_shown_ = 0;
-    exporting_ = new wxProgressDialog("Export audio", W("Exporting " + base_name(path)), 1000, this,
-                                      wxPD_APP_MODAL | wxPD_CAN_ABORT | wxPD_ELAPSED_TIME | wxPD_REMAINING_TIME);
-    export_timer_.Start(kExportPoll);
+    auto cancel = open_export_window("Export audio", "Exporting " + base_name(path));
     std::shared_ptr<Mixer> mixer = mixer_;
     RenderRequest req = request();
     worker_->ask<RenderResult>(
@@ -2482,6 +2538,37 @@ void Studio::on_export(wxCommandEvent &) {
             });
         },
         [this, path](RenderResult res) { exported(res, path); });
+}
+
+//: A window that stays until the export is written, so the program is not
+//: closed under it, and that can give the export up: Export audio's, and
+//: Export tracks' for all the tracks, its bar across them all. It returns
+//: the flag Cancel sets.
+std::shared_ptr<std::atomic<bool>> Studio::open_export_window(const std::string &title,
+                                                              const std::string &message) {
+    rendering_ = true;
+    mi_play_->Enable(false);
+    auto cancel = std::make_shared<std::atomic<bool>>(false);
+    export_cancel_ = cancel;
+    export_shown_ = 0;
+    // hiding itself at the end, where it would otherwise wait for Close
+    exporting_ = new wxProgressDialog(W(title), W(message), 1000, this,
+                                      wxPD_APP_MODAL | wxPD_AUTO_HIDE | wxPD_CAN_ABORT | wxPD_ELAPSED_TIME |
+                                          wxPD_REMAINING_TIME);
+    export_timer_.Start(kExportPoll);
+    return cancel;
+}
+
+//: The export's window gone, its bar at the end first if all of it was
+//: written (`full`), and the program free to play again.
+void Studio::close_export_window(bool full) {
+    export_timer_.Stop();
+    if (full && exporting_) exporting_->Update(1000);
+    delete exporting_;
+    exporting_ = nullptr;
+    export_cancel_.reset();
+    rendering_ = false;
+    mi_play_->Enable(true);
 }
 
 //: How far the export has got, 0 to 1, onto its window; below 0 only looks
@@ -2495,12 +2582,7 @@ void Studio::export_progress(double done) {
 //: The export is over, written or given up: its window goes, and what
 //: happened is said -- with the system's asterisk when it was written.
 void Studio::exported(const RenderResult &res, const std::string &path) {
-    export_timer_.Stop();
-    delete exporting_;
-    exporting_ = nullptr;
-    export_cancel_.reset();
-    rendering_ = false;
-    mi_play_->Enable(true);
+    close_export_window(res.ok);
     if (!res.ok) {
         say(res.cancelled ? W("export cancelled: " + base_name(path) + " was not written")
                           : W("could not write " + base_name(path) + (res.error.empty() ? "" : ": " + res.error)));
@@ -2557,19 +2639,37 @@ void Studio::on_export_tracks(wxCommandEvent &) {
         say("nothing to export: no track has any notes in it");
         return;
     }
+    // the kind of file, as Export audio's file box chooses it: the one
+    // chosen last by either to begin with
+    wxArrayString kinds;
+    wxStringTokenizer wildcard(kExportWildcard, "|");
+    for (int k = 0; wildcard.HasMoreTokens(); ++k) {
+        wxString part = wildcard.GetNextToken();
+        if (k % 2 == 0) kinds.Add(part);
+    }
+    int kind = 0;
+    for (int k = 0; k < kExportKinds; ++k)
+        if (settings_.export_format == kExportExtensions[k]) kind = k;
+    wxSingleChoiceDialog format(this, "Write each track as", "Export tracks", kinds);
+    format.SetSelection(kind);
+    if (format.ShowModal() != wxID_OK) return;
+    kind = std::max(0, std::min(kExportKinds - 1, format.GetSelection()));
     wxDirDialog dlg(this, "Export each track into this folder");
     if (dlg.ShowModal() != wxID_OK) return;
+    if (settings_.export_format != kExportExtensions[kind]) {
+        settings_.export_format = kExportExtensions[kind];
+        save_settings(settings_);
+    }
     std::string folder = U(dlg.GetPath());
     std::string base = path_.empty() ? "song" : base_name(strip_extension(path_));
     auto jobs = std::make_shared<std::vector<std::pair<Track, std::string>>>();
-    for (const auto &j : export_jobs(song_.tracks, folder, base)) jobs->push_back({*j.first, j.second});
+    for (const auto &j : export_jobs(song_.tracks, folder, base, kExportExtensions[kind]))
+        jobs->push_back({*j.first, j.second});
     std::vector<std::string> silent;
     auto heard_now = audible(song_.tracks);
     for (const Track &t : song_.tracks)
         if (!t.notes.empty() && std::find(heard_now.begin(), heard_now.end(), &t) == heard_now.end())
             silent.push_back(t.name);
-    rendering_ = true;
-    mi_play_->Enable(false);
     say(W("exporting " + plural(jobs->size(), "track") + " into " + folder));
     if (!silent.empty()) {
         std::string names;
@@ -2577,34 +2677,56 @@ void Studio::on_export_tracks(wxCommandEvent &) {
         say(W("including " + names + ", which " + (silent.size() == 1 ? "is" : "are") +
               " silent in the song at the moment"));
     }
+    open_export_window("Export tracks", "Exporting " + plural(jobs->size(), "track"));
     export_track(jobs, 0, 0);
 }
 
 //: One track, then the next: the engines do one at a time, and each one is
-//: worth saying out loud.
+//: worth saying out loud. The one window stays until the last is written,
+//: its bar how far all of them have got, and Cancel gives up the track being
+//: written and those after it. Only with every track written does the bar
+//: reach its end, with the system's asterisk, as Export audio's does.
 void Studio::export_track(std::shared_ptr<std::vector<std::pair<Track, std::string>>> jobs, size_t i,
                           int written) {
-    if (i >= jobs->size()) {
-        rendering_ = false;
-        mi_play_->Enable(true);
-        size_t failed = jobs->size() - size_t(written);
-        say(W("exported " + std::to_string(written) + " of " + plural(jobs->size(), "track") +
-              (failed ? ", " + std::to_string(failed) + " failed" : "")));
+    bool cancelled = export_cancel_ && *export_cancel_;
+    if (i >= jobs->size() || cancelled) {
+        bool all = !cancelled && size_t(written) == jobs->size();
+        close_export_window(all);
+        size_t failed = i - size_t(written);
+        if (all) {
+#ifdef __WXMSW__
+            ::MessageBeep(MB_ICONASTERISK);
+#endif
+        }
+        say(W((cancelled ? "export cancelled: exported " : "exported ") + std::to_string(written) + " of " +
+              plural(jobs->size(), "track") + (failed ? ", " + std::to_string(failed) + " failed" : "")));
         return;
     }
     std::string path = (*jobs)[i].second;
-    say(W("rendering " + base_name(path) + ", " + std::to_string(i + 1) + " of " + std::to_string(jobs->size())));
+    std::string which = base_name(path) + ", " + std::to_string(i + 1) + " of " + std::to_string(jobs->size());
+    say(W("rendering " + which));
+    if (exporting_) exporting_->Update(export_shown_, W("Exporting " + which));
     std::vector<const Track *> one{&(*jobs)[i].first};
-    render(request(nullptr, 0.0, &one), path, [this, jobs, i, written, path](RenderResult res) {
-        int w = written;
-        if (res.ok) {
-            ++w;
-            say(W(printf_s("wrote %s, %.2f seconds", base_name(path).c_str(), res.seconds)));
-        } else {
-            say(W("could not write " + base_name(path)));
-        }
-        export_track(jobs, i + 1, w);
-    });
+    // each track its share of the window's bar
+    double share = 1.0 / double(jobs->size());
+    std::shared_ptr<std::atomic<bool>> cancel = export_cancel_;
+    render(
+        request(nullptr, 0.0, &one), path,
+        [this, cancel, i, share](double done) {
+            CallAfter([this, i, share, done] { export_progress((double(i) + done) * share); });
+            return !*cancel;
+        },
+        [this, jobs, i, written, path](RenderResult res) {
+            int w = written;
+            if (res.ok) {
+                ++w;
+                say(W(printf_s("wrote %s, %.2f seconds", base_name(path).c_str(), res.seconds)));
+            } else if (!res.cancelled) {
+                say(W("could not write " + base_name(path)));
+            }
+            // a track given up is neither written nor failed
+            export_track(jobs, res.cancelled ? i : i + 1, w);
+        });
 }
 
 // -- undo ----------------------------------------------------------------------------------
@@ -2689,10 +2811,11 @@ void Studio::touch(bool dirty) {
     keep_a_copy();
 }
 
-//: The project's file, or the name of the file the song was imported from
-//: until it is saved as a project, or Untitled.
+//: The song's name, its file's without the ending or that of the file it
+//: was imported from (song_name), or Untitled.
 void Studio::show_title() {
-    std::string name = !path_.empty() ? base_name(path_) : !import_name_.empty() ? import_name_ : "Untitled";
+    std::string name = song_name();
+    if (name.empty()) name = "Untitled";
     SetTitle(W((dirty_ ? "*" : "") + name + " - " + kAppName));
 }
 
@@ -2807,11 +2930,18 @@ void Studio::open_project(const std::string &path) {
         take_midi(path, false);
         return;
     }
+    if (is_audio_file(path)) {
+        open_sound(path);
+        return;
+    }
     Song song;
     try {
         song = load_project(path);
     } catch (const std::exception &e) {
-        say(W("cannot open " + base_name(path) + ": " + e.what()));
+        // anything not named as a project is not a file this program opens
+        cannot_load(path, extension_lower(path) == kProjectSuffix
+                              ? std::string(e.what())
+                              : "it is not a project, a MIDI file, a VocalWriter song or a sound file");
         return;
     }
     double bpm = song.bpm;
@@ -3150,8 +3280,24 @@ void Studio::import_vocalwriter(const std::string &path) {
     to_tracks();
 }
 
-//: A MIDI file or VocalWriter song that could not be read: said in a box to
-//: be put away with OK, with the system's critical stop, and in Messages.
+//: A sound file opened as a song: a new song named after it, the file on a
+//: backing track under Voice 1, as Add backing track would put it there.
+void Studio::open_sound(const std::string &path) {
+    std::string why;
+    if (!probe_audio(path, &why)) {
+        cannot_load(path, why);
+        return;
+    }
+    take(backing_song(path), "");
+    import_name_ = base_name(strip_extension(path));
+    show_title();
+    say(W("opened " + base_name(path) + " as a backing track under Voice 1, at half volume, from the start of "
+          "the song"));
+    to_tracks();
+}
+
+//: A file that could not be opened or imported: said in a box to be put
+//: away with OK, with the system's critical stop, and in Messages.
 void Studio::cannot_load(const std::string &path, const std::string &why) {
     std::string said = base_name(path) + " could not be loaded: " + why + ".";
     say(W(said));

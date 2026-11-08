@@ -126,6 +126,7 @@ private:
     void move_tracks(int delta);
     void select_all_tracks();
     void transpose_tracks(int by);
+    void nudge_tracks(int volume, int pan);
     void on_panes(wxCommandEvent &);
     void on_app_activate(wxActivateEvent &evt);
     void come_back();
@@ -201,8 +202,10 @@ private:
     void on_export_midi(wxCommandEvent &);
     void export_track(std::shared_ptr<std::vector<std::pair<Track, std::string>>> jobs, size_t i,
                       int written);
+    std::shared_ptr<std::atomic<bool>> open_export_window(const std::string &title, const std::string &message);
+    void close_export_window(bool full);
     void mix(const RenderRequest &req, std::function<void(Mixed)> done);
-    void render(const RenderRequest &req, const std::string &out,
+    void render(const RenderRequest &req, const std::string &out, std::function<bool(double)> progress,
                 std::function<void(RenderResult)> done);
     void on_auto_preview(wxCommandEvent &);
     void on_panthera(wxCommandEvent &);
@@ -270,6 +273,7 @@ private:
     void on_append(wxCommandEvent &);
     void take_midi(const std::string &path, bool append);
     void import_vocalwriter(const std::string &path);
+    void open_sound(const std::string &path);
     void cannot_load(const std::string &path, const std::string &why);
     void imported_words(std::vector<ImportedPart> parts,
                         const std::map<std::string, std::vector<std::string>> &found, size_t pending);

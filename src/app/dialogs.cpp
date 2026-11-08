@@ -435,6 +435,40 @@ void AddWordDialog::edit_word(int i) {
     if (playing_) start_play();
 }
 
+//: A word of Add text taken out with Delete: the words after it move back
+//: onto its notes, each keeping the notes Notes to use has spread to it, and
+//: Notes to use becomes their sum, as when a word is opened.
+void AddWordDialog::remove_word(int i) {
+    if (i < 0 || i >= int(words_.size())) return;
+    int most = std::max(1, int(existing_.size()));
+    for (size_t k = 0; k < words_.size() && k < shares_.size(); ++k)
+        if (shares_[k] > 0) words_[k].notes = shares_[k];
+    std::string gone = words_[size_t(i)].word;
+    words_.erase(words_.begin() + i);
+    if (words_.empty()) {
+        // nothing left to put on the notes, until the text is looked up again
+        stop_play();
+        shares_.clear();
+        rows_.clear();
+        sync();
+        play_->Disable();
+        if (ok_) ok_->Disable();
+        studio_->say(W("removed " + gone + ", no words left"));
+        return;
+    }
+    int want = 0;
+    for (const TextWord &w : words_) want += w.notes;
+    count_->SetValue(std::min(want, most));
+    // the word that came after it selected, or the last
+    build_rows(std::min(i, int(words_.size()) - 1));
+    const TextWord &next = words_[size_t(std::min(i, int(words_.size()) - 1))];
+    studio_->say(W("removed " + gone + "; " + std::to_string(words_.size()) +
+                   (words_.size() == 1 ? " word" : " words") + " on " + std::to_string(rows_.size()) +
+                   (rows_.size() == 1 ? " note" : " notes") + "; " + next.word));
+    // a preview going on is heard again as it is now
+    if (playing_) start_play();
+}
+
 //: Notes to use put in the dialog, the first time something is looked up.
 void AddWordDialog::show_count() {
     wxSizer *row = count_->GetContainingSizer();
@@ -545,6 +579,7 @@ void AddWordDialog::on_key(wxKeyEvent &evt) {
     int i = list_->FirstSelected();
     if (text_) {
         if ((code == WXK_RETURN || code == WXK_NUMPAD_ENTER) && i >= 0) edit_word(i);
+        else if ((code == WXK_DELETE || code == WXK_NUMPAD_DELETE) && i >= 0) remove_word(i);
         else evt.Skip();
         return;
     }
@@ -1902,7 +1937,8 @@ TrackDialog::TrackDialog(wxWindow *parent, Studio *studio, const Track &track)
     outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
     SetSizerAndFit(outer);
     name_->SetFocus();
-    name_->SetInsertionPointEnd();
+    // selected, so what is typed replaces the name, as in a field tabbed to
+    name_->SelectAll();
 }
 
 //: The voice box for the engine chosen, with `select` chosen in it if it is
@@ -1917,8 +1953,7 @@ void TrackDialog::fill_voices(int select) {
     int at = 0;
     for (const VoiceListing &v : engine.voices) {
         // The engine's name is in the box beside it, so it is not said again:
-        // "Betty" rather than "DECtalk Betty". A voice that is nothing but the
-        // engine's name -- the SSI-263's own -- keeps it.
+        // "Betty" rather than "DECtalk Betty".
         std::string name = short_voice_name(v.name, engine.name);
         if (v.id == select) at = int(ids_.size());
         ids_.push_back(v.id);
@@ -2007,7 +2042,8 @@ BackingDialog::BackingDialog(wxWindow *parent, const Track &track)
     Bind(wxEVT_BUTTON, &BackingDialog::on_ok, this, wxID_OK);
     SetSizerAndFit(outer);
     name_->SetFocus();
-    name_->SetInsertionPointEnd();
+    // selected, so what is typed replaces the name, as in a field tabbed to
+    name_->SelectAll();
 }
 
 std::string BackingDialog::file() const {
@@ -2024,13 +2060,20 @@ void BackingDialog::on_browse(wxCommandEvent &) {
     path_->SetFocus();
 }
 
-//: A file that is not there is said now, while it can still be put right.
+//: A file that is not there, or is not a sound file, is said now, while it
+//: can still be put right.
 void BackingDialog::on_ok(wxCommandEvent &evt) {
     double v;
+    std::string why;
     if (!file_exists(file())) {
         wxMessageBox(file().empty() ? wxString("Choose the file the backing track plays.")
                                     : W("There is no file " + file() + "."),
                      "Backing track", wxOK | wxICON_ERROR, this);
+        path_->SetFocus();
+        path_->SelectAll();
+    } else if (!probe_audio(file(), &why)) {
+        wxMessageBox(W(base_name(file()) + " cannot be played: " + why + "."), "Backing track",
+                     wxOK | wxICON_ERROR, this);
         path_->SetFocus();
         path_->SelectAll();
     } else if (!read_number(start_->GetValue(), &v)) {

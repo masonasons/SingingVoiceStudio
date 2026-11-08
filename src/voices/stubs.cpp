@@ -43,7 +43,7 @@ std::unique_ptr<Family> make_dectalk_family() {
 
 #ifndef SVS_HAVE_SSI263
 std::unique_ptr<Family> make_ssi263_family() {
-    return std::make_unique<Absent>("SSI-263", std::vector<VoiceEntry>{{kSsi263Base, "SSI-263"}});
+    return std::make_unique<Absent>("SSI-263", std::vector<VoiceEntry>{{kSsi263Base, "SSI-263 Standard"}});
 }
 #endif
 
@@ -52,6 +52,42 @@ std::unique_ptr<Family> make_macintalk_family() {
     return std::make_unique<Absent>("MacinTalk", std::vector<VoiceEntry>{});
 }
 void set_macintalk_folder(const std::string &) {}
+#endif
+
+#ifndef SVS_HAVE_SHARPVOX
+std::unique_ptr<Family> make_sharpvox_family() {
+    const char *names[] = {"Paul", "Beth", "Chris", "Deborah", "Jack", "Jess",
+                           "John", "Matt", "Pirate", "Tommy", "Whisper"};
+    std::vector<VoiceEntry> v;
+    for (int i = 0; i < 11; ++i) v.push_back({kSharpVoxBase + i, std::string("SharpVox ") + names[i]});
+    return std::make_unique<Absent>("SharpVox", v);
+}
+#endif
+
+#ifndef SVS_HAVE_BESTSPEECH
+std::unique_ptr<Family> make_bestspeech_family() {
+    std::vector<VoiceEntry> v;
+    for (int i = 0; i < 6; ++i) v.push_back({kBestBase + i, "BeSTspeech " + std::to_string(i + 1)});
+    return std::make_unique<Absent>("BeSTspeech", v);
+}
+#endif
+
+#ifndef SVS_HAVE_ELOQUENCE
+std::unique_ptr<Family> make_eloquence_family() {
+    const char *names[] = {"Reed", "Shelley", "Bobby", "Rocko", "Glen", "Sandy", "Grandma", "Grandpa"};
+    std::vector<VoiceEntry> v;
+    for (int i = 0; i < 8; ++i) v.push_back({kEloquenceBase + i, std::string("Eloquence ") + names[i]});
+    return std::make_unique<Absent>("Eloquence", v);
+}
+#endif
+
+#ifndef SVS_HAVE_PROSE
+std::unique_ptr<Family> make_prose_family() {
+    const char *names[] = {"Standard", "Deep", "High"};
+    std::vector<VoiceEntry> v;
+    for (int i = 0; i < 3; ++i) v.push_back({kProseBase + i, std::string("Prose 2000 ") + names[i]});
+    return std::make_unique<Absent>("Prose 2000", v);
+}
 #endif
 
 #ifndef SVS_HAVE_MICROSOFT

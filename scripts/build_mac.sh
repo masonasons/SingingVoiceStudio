@@ -34,6 +34,9 @@
 #   Microsoft     voices/microsoft in this tree (Sam.spd, Mike.spd, Mary.spd and
 #                 the .sdf files beside them, from a Windows machine)
 #   SSI-263       nothing: its phoneme ROM is compiled in
+#   SharpVox      nothing: it is compiled in and has no data
+#   BeSTspeech    nothing: its tables are compiled in
+#   Prose 2000    nothing: its ROM's data is compiled in
 #
 # What the build needs: Xcode's command line tools, CMake, Ninja and git.
 # wxWidgets is fetched and built statically into build-deps/wx the first time,
@@ -182,6 +185,8 @@ put_if third_party/dectalk/LICENCE "$RES/licenses/DECtalk.txt"
 put_if third_party/ssi263-speech/LICENSE "$RES/licenses/SSI-263.txt"
 put_if third_party/ssi263-speech/third_party/casso/LICENSE "$RES/licenses/SSI-263 Casso.txt"
 put_if third_party/ms-sam-mike-mary-decomp/LICENSE "$RES/licenses/Microsoft Sam reconstruction.txt"
+put_if third_party/SharpVoxTTS/LICENSE "$RES/licenses/SharpVox.txt"
+put_if third_party/openbst/LICENSE "$RES/licenses/openbst (BeSTspeech).txt"
 put_if engine/README.md "$RES/licenses/VocalWriterC README.md"
 cat > "$RES/DATA-NOTICE.txt" <<'EOF'
 This application carries data that belongs to others, gathered from this machine:
@@ -197,7 +202,7 @@ say "checking the engines from the new bundle"
 # only the bundle itself counts: not the source tree the program was built from
 STATUS=$(SVS_ONLY_BESIDE=1 "$APP/Contents/MacOS/svs" --version 2>&1)
 echo "$STATUS" | sed 's/^/   /'
-echo "$STATUS" | grep -E '^(VocalWriter|DECtalk|SSI-263|Microsoft|GM Soundbank): ' | grep -v 'voices ready' | while read -r line; do
+echo "$STATUS" | grep -E '^(VocalWriter|DECtalk|SSI-263|Microsoft|SharpVox|BeSTspeech|Prose 2000|GM Soundbank): ' | grep -v 'voices ready' | while read -r line; do
     warn "engine not ready: $line"
 done
 TMP=$(mktemp -d)
@@ -210,7 +215,7 @@ EOF
 # (on a machine that has none) leaves Fred out with SVS_CHECK_VOICES.
 OLDIFS=$IFS
 IFS='|'
-for voice in ${SVS_CHECK_VOICES:-Robert|DECtalk Betty|SSI-263|Microsoft Sam|MacinTalk Fred}; do
+for voice in ${SVS_CHECK_VOICES:-Robert|DECtalk Betty|SSI-263 Standard|Microsoft Sam|SharpVox Paul|BeSTspeech 1|Prose 2000 1|MacinTalk Fred}; do
     IFS=$OLDIFS
     if SVS_ONLY_BESIDE=1 "$APP/Contents/MacOS/svs" "$TMP/check.vws" -o "$TMP/check.wav" --voice "$voice" > "$TMP/render.log" 2>&1 \
        && [ "$(stat -f %z "$TMP/check.wav")" -gt 40000 ]; then
@@ -298,8 +303,9 @@ if [ "$DMG" = 1 ]; then
 Singing Voice Studio for macOS ($ARCH, macOS $MIN or later)
 
 Drag Singing Voice Studio to Applications and open it. It sings with
-VocalWriter 2.0 (87 voices), DECtalk (10), the SSI-263 (4) and Microsoft
-Sam, Mike and Mary (33, with the SAPI 4 voice modes). Every engine's data is
+VocalWriter 2.0 (87 voices), DECtalk (10), the SSI-263 (4), Microsoft
+Sam, Mike and Mary (33, with the SAPI 4 voice modes), SharpVox (11),
+BeSTspeech (6) and the Prose 2000 (3). Every engine's data is
 inside the application; see DATA-NOTICE.txt and the licenses folder in
 Contents/Resources.
 

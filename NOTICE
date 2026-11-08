@@ -14,6 +14,27 @@ It does not cover the synthesisers, which carry their own licences:
     third_party/ssi263-speech/           the SSI-263 emulation (github.com/tgeczy/ssi263-speech), MIT
     third_party/ms-sam-mike-mary-decomp/ the Microsoft TTS reconstruction
                                          (github.com/KamiKitsune420/ms-sam-mike-mary-decomp), MIT
+    third_party/SharpVoxTTS/             SharpVox TTS (github.com/dectalk/SharpVoxTTS), MIT;
+                                         compiled into the program
+    third_party/openbst/                 openbst, the BeSTspeech reimplementation
+                                         (github.com/Mudb0y/openbst), MIT; compiled into the
+                                         program with the 1995 English build's tables,
+                                         src/data/1995.c, which are Berkeley Speech
+                                         Technologies' and later HumanWare's and not under
+                                         the MIT licence (see its LICENSE)
+    third_party/openevv/                 OpenEVV, the Eloquence reimplementation
+                                         (github.com/Mudb0y/openevv), MIT; compiled into the
+                                         program with its US English, lang/enus, which is
+                                         transcribed from IBM's Embedded ViaVoice and is IBM's,
+                                         not under the MIT licence, but for its dictionary
+                                         (see its NOTICE)
+    third_party/prose2000_reborn/        Prose 2000 Reborn, the Prose 2000 decompilation
+                                         (github.com/rommix0/prose2000_reborn), which states no
+                                         licence and is used with its author's permission;
+                                         compiled into the program with the ROM data it
+                                         carries, src/data/, which, like the firmware it is
+                                         decompiled from, is Speech Plus's and Telesensory
+                                         Systems'
     third_party/nlohmann/                nlohmann/json, MIT
 
 The builds also link in libraries fetched while they build, each under its

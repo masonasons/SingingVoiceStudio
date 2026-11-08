@@ -12,8 +12,9 @@ add_library(svs_macintalk STATIC ${SVS_ROOT}/src/voices/macintalk.cpp)
 if(APPLE)
   # On a Mac the system's own voices sing: spoken through AVSpeechSynthesizer
   # (macintalk_mac.mm) and retimed and retuned to the score (macintalk_dsp.cpp).
-  target_sources(svs_macintalk PRIVATE ${SVS_ROOT}/src/voices/macintalk_mac.mm
-                                       ${SVS_ROOT}/src/voices/macintalk_dsp.cpp)
+  target_sources(svs_macintalk PRIVATE ${SVS_ROOT}/src/voices/macintalk_mac.mm)
+  include(${SVS_ROOT}/cmake/engines/dsp.cmake)
+  target_link_libraries(svs_macintalk PUBLIC svs_dsp)
   set_source_files_properties(${SVS_ROOT}/src/voices/macintalk_mac.mm PROPERTIES
                               COMPILE_OPTIONS "-fobjc-arc")
   target_link_libraries(svs_macintalk PUBLIC "-framework AVFoundation" "-framework Foundation")

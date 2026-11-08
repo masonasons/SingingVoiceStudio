@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <utility>
 #include <vector>
 
 namespace svs {
@@ -33,6 +34,11 @@ struct F0Track {
 //: normalised difference, the first dip under a threshold, refined by a
 //: parabola. Frames of about 46 ms every 5 ms.
 F0Track track_f0(const std::vector<float> &x, double rate, double fmin = 55.0, double fmax = 1100.0);
+
+//: The pitch of samples an engine was told to sing, frame by frame: each
+//: frame `frame` samples long from where it starts, with its pitch, 0 where
+//: it is unvoiced; `length` samples in all.
+F0Track frame_track(const std::vector<std::pair<size_t, double>> &frames, size_t frame, size_t length, double rate);
 
 struct Segment {
     size_t begin = 0, end = 0;   //: samples, [begin, end)
@@ -57,6 +63,18 @@ double rms(const std::vector<float> &x, double rate, const F0Track *voicing);
 std::vector<float> psola(const std::vector<float> &src, double rate, const F0Track &f0, size_t length,
                          const std::function<double(double)> &source_time,
                          const std::function<double(double)> &target_hz);
+
+//: `psola` for a voice whose waveform has more than one peak a period of
+//: about the same height, as a formant synthesiser's often has, where the
+//: strongest peak moves from one to another and the grains come back
+//: jittered. Each mark is put one period on from the last where the period
+//: after it best matches the one before (to a fraction of a sample, by a
+//: parabola through the correlations), and the grains are read and laid
+//: down between samples. Eloquence and the Prose 2000 are retuned through
+//: this one.
+std::vector<float> psola_matched(const std::vector<float> &src, double rate, const F0Track &f0, size_t length,
+                                 const std::function<double(double)> &source_time,
+                                 const std::function<double(double)> &target_hz);
 
 //: A time map for a syllable, for `psola`: the vowel -- the longest voiced
 //: stretch -- is stretched or squeezed to fill the note, and the consonants

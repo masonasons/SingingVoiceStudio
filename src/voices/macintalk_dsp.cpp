@@ -23,6 +23,19 @@ double F0Track::at(double seconds) const {
     return f0[size_t(i)];
 }
 
+F0Track frame_track(const std::vector<std::pair<size_t, double>> &frames, size_t frame, size_t length, double rate) {
+    F0Track t;
+    for (size_t i = 0;; ++i) {
+        size_t at = size_t(std::lround(double(i) * t.hop_s * rate));
+        if (at >= length) break;
+        auto it = std::upper_bound(frames.begin(), frames.end(), at,
+                                   [](size_t v, const std::pair<size_t, double> &e) { return v < e.first; });
+        bool in = it != frames.begin() && at < (it - 1)->first + frame;
+        t.f0.push_back(in ? (it - 1)->second : 0.0);
+    }
+    return t;
+}
+
 F0Track track_f0(const std::vector<float> &x, double rate, double fmin, double fmax) {
     F0Track t;
     t.hop_s = 0.005;
@@ -194,6 +207,76 @@ std::vector<Mark> pitch_marks(const std::vector<float> &x, double rate, const F0
     return marks;
 }
 
+struct FineMark {
+    double pos;      //: a glottal pulse, in samples, between samples if need be
+    double period;   //: the period there, in samples
+};
+
+//: `x` at `p` samples, read between samples in a straight line.
+double sample_at(const std::vector<float> &x, double p) {
+    long i = long(std::floor(p));
+    if (i < 0 || i + 1 >= long(x.size())) return 0.0;
+    double f = p - double(i);
+    return x[size_t(i)] * (1.0 - f) + x[size_t(i + 1)] * f;
+}
+
+//: One mark per glottal pulse through every voiced stretch: the strongest
+//: peak of the first period, then each one a period on from the last, at the
+//: lag (within a quarter of a period of the expected one) where the period
+//: from there correlates best with the period from the last.
+std::vector<FineMark> matched_marks(const std::vector<float> &x, double rate, const F0Track &f0) {
+    std::vector<FineMark> marks;
+    const long n = long(x.size());
+    long i = 0;
+    while (i < n) {
+        double hz = f0.at(i / rate);
+        if (hz <= 0) {
+            ++i;
+            continue;
+        }
+        long period = std::max(2L, long(std::lround(rate / hz)));
+        long end = std::min(n, i + period);
+        long m = i;
+        for (long k = i; k < end; ++k)
+            if (x[size_t(k)] > x[size_t(m)]) m = k;
+        double last = double(m);
+        marks.push_back({last, double(period)});
+        std::vector<double> score;
+        while (true) {
+            double hz_here = f0.at(last / rate);
+            if (hz_here <= 0) break;
+            double p = rate / hz_here;
+            long lo = std::max(2L, long(std::lround(0.75 * p))), hi = long(std::lround(1.25 * p));
+            long span = std::max(2L, long(std::lround(p)));
+            if (long(last) + hi + span + 1 >= n) break;
+            score.assign(size_t(hi - lo + 1), 0.0);
+            for (long d = lo; d <= hi; ++d) {
+                double uv = 0.0, uu = 0.0, vv = 0.0;
+                for (long k = 0; k < span; ++k) {
+                    double u = sample_at(x, last + double(k)), v = sample_at(x, last + double(d + k));
+                    uv += u * v;
+                    uu += u * u;
+                    vv += v * v;
+                }
+                score[size_t(d - lo)] = uv / std::sqrt(uu * vv + 1e-20);
+            }
+            long best = long(std::max_element(score.begin(), score.end()) - score.begin());
+            double frac = 0.0;
+            if (best > 0 && best + 1 < long(score.size())) {
+                double a = score[size_t(best - 1)], b = score[size_t(best)], c = score[size_t(best + 1)];
+                double den = a - 2.0 * b + c;
+                if (den < 0.0) frac = 0.5 * (a - c) / den;
+            }
+            double d = double(lo + best) + frac;
+            if (f0.at((last + d) / rate) <= 0) break;
+            marks.push_back({last + d, d});
+            last += d;
+        }
+        i = long(last) + 1;
+    }
+    return marks;
+}
+
 }  // namespace
 
 std::vector<float> psola(const std::vector<float> &src, double rate, const F0Track &f0, size_t length,
@@ -231,6 +314,58 @@ std::vector<float> psola(const std::vector<float> &src, double rate, const F0Tra
             t += p_out;
         } else {
             add_grain(s, hop, long(std::lround(t)), 1.0);
+            t += double(hop);
+        }
+    }
+    return out;
+}
+
+std::vector<float> psola_matched(const std::vector<float> &src, double rate, const F0Track &f0, size_t length,
+                                 const std::function<double(double)> &source_time,
+                                 const std::function<double(double)> &target_hz) {
+    std::vector<float> out(length, 0.0f);
+    if (src.empty() || length == 0) return out;
+    const std::vector<FineMark> marks = matched_marks(src, rate, f0);
+    const double n = double(src.size());
+    const long hop = std::max(1L, long(std::lround(rate * 0.005)));
+    // a grain `half` wide either side, read around `centre_src` and laid
+    // around `centre_out`, both of them between samples if need be
+    auto add_grain = [&](double centre_src, long half, double centre_out, double gain) {
+        long c = long(std::floor(centre_out));
+        double frac = centre_out - double(c);
+        for (long k = -half; k <= half + 1; ++k) {
+            long oi = c + k;
+            double d = double(k) - frac;
+            if (oi < 0 || oi >= long(length) || std::fabs(d) >= double(half)) continue;
+            double w = 0.5 * (1.0 + std::cos(kPi * d / double(half)));
+            out[size_t(oi)] += float(sample_at(src, centre_src + d) * w * gain);
+        }
+    };
+    double t = 0.0;   // output position, in samples
+    while (t < double(length)) {
+        double s = std::max(0.0, std::min(n - 1.0, source_time(t / rate) * rate));
+        double hz_src = f0.at(s / rate);
+        double hz_want = target_hz(t / rate);
+        if (hz_src > 0 && !marks.empty()) {
+            // the two marks either side, their grains mixed by how near
+            // each is: taking the nearest alone, a voice raised by more than
+            // an octave takes the same mark twice and the next one twice,
+            // and that pattern is heard as an undertone an octave down
+            auto it = std::lower_bound(marks.begin(), marks.end(), s,
+                                       [](const FineMark &m, double v) { return m.pos < v; });
+            const FineMark &b = it == marks.end() ? marks.back() : *it;
+            const FineMark &a = it == marks.begin() ? b : *(it - 1);
+            double mix = b.pos - a.pos > 1.0 && b.pos - a.pos < 1.5 * b.period
+                             ? std::max(0.0, std::min(1.0, (s - a.pos) / (b.pos - a.pos)))
+                             : (s - a.pos < b.pos - s ? 0.0 : 1.0);
+            double p_src = a.period + (b.period - a.period) * mix;
+            double p_out = hz_want > 0 ? rate / std::max(40.0, std::min(1200.0, hz_want)) : p_src;
+            long half = std::max(2L, long(std::lround(p_src)));
+            if (mix < 1.0) add_grain(a.pos, half, t, (1.0 - mix) * p_out / p_src);
+            if (mix > 0.0) add_grain(b.pos, half, t, mix * p_out / p_src);
+            t += p_out;
+        } else {
+            add_grain(std::floor(s), hop, std::floor(t), 1.0);
             t += double(hop);
         }
     }

@@ -245,6 +245,12 @@ struct Song {
 constexpr int kVocalWriterPortamento = 40;
 constexpr Reverb kVocalWriterReverb{40, 24};
 Song fresh_song();
+//: A backing track playing the sound file at `path`, named after it, at
+//: half volume: a finished recording is far louder than a voice singing alone.
+Track backing_track(const std::string &path);
+//: A sound file opened as a song: a song begun afresh, with a part to sing
+//: on and the file on a backing track under it.
+Song backing_song(const std::string &path);
 
 //: A track of rests holding the tempo and time signature changes, each at
 //: its beat: how an imported song brings its changes in, wherever they fall.
@@ -299,9 +305,11 @@ std::vector<BendPoint> timeline(const std::vector<Note> &notes);
 //: every note's mod wheel gathered up the same way (`semitones` holds the wheel)
 std::vector<BendPoint> mod_timeline(const std::vector<Note> &notes);
 
-//: (track, where it goes) for each track with notes, no two files alike
+//: (track, where it goes) for each track with notes, no two files alike,
+//: each ending in `ext`
 std::vector<std::pair<const Track *, std::string>> export_jobs(
-    const std::vector<Track> &tracks, const std::string &folder, const std::string &base);
+    const std::vector<Track> &tracks, const std::string &folder, const std::string &base,
+    const std::string &ext = ".wav");
 
 // -- files -----------------------------------------------------------------
 
