@@ -850,11 +850,15 @@ std::vector<std::pair<std::string, const MidiTrack *>> named_tracks(const MidiFi
     return out;
 }
 
+//: A tempo as VocalWriter's import reads it: 60000000 over the
+//: microseconds a beat, cut to a whole number.
+double whole_bpm(long us) { return us > 0 ? double(60000000L / us) : 120.0; }
+
 double midi_tempo(const MidiFile &midi) {
     for (const MidiTrack &t : midi.tracks) {
         if (t.tempos.empty()) continue;
         auto first = *std::min_element(t.tempos.begin(), t.tempos.end());
-        return 60e6 / double(first.second);
+        return whole_bpm(first.second);
     }
     return 120.0;
 }
@@ -901,7 +905,7 @@ std::vector<TempoChange> midi_tempo_changes(const MidiFile &midi) {
                      [](const std::pair<long, long> &a, const std::pair<long, long> &b) { return a.first < b.first; });
     std::vector<TempoChange> out;
     for (size_t i = 1; i < all.size(); ++i)
-        if (all[i].second != all[i - 1].second) out.push_back({all[i].first / div, 60e6 / double(all[i].second)});
+        if (all[i].second != all[i - 1].second) out.push_back({all[i].first / div, whole_bpm(all[i].second)});
     return clean_tempo_changes(out);
 }
 
