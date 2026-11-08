@@ -13,3 +13,6 @@
 [submodule "third_party/SharpVoxTTS"]
 	path = third_party/SharpVoxTTS
 	url = https://github.com/dectalk/SharpVoxTTS
+[submodule "third_party/openbst"]
+	path = third_party/openbst
+	url = https://github.com/Mudb0y/openbst

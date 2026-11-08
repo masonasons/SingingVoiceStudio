@@ -15,6 +15,7 @@ Registry::Registry() {
     families_.push_back(make_ssi263_family());
     families_.push_back(make_microsoft_family());
     families_.push_back(make_macintalk_family());
+    families_.push_back(make_bestspeech_family());
     families_.push_back(make_sharpvox_family());
     families_.push_back(make_gm_family());
 }
@@ -66,6 +67,7 @@ Family *Registry::family_of(int voice_id) {
         if (base == kSsi263Base && f->name() == "SSI-263") return f.get();
         if (base == kMicrosoftBase && f->name() == "Microsoft") return f.get();
         if (base == kMacinTalkBase && f->name() == "MacinTalk") return f.get();
+        if (base == kBestBase && f->name() == "BeSTspeech") return f.get();
         if (base == kSharpVoxBase && f->name() == "SharpVox") return f.get();
         if (base == kGmBase && f->name() == "GM Soundbank") return f.get();
     }

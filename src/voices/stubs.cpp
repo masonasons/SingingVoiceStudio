@@ -64,6 +64,14 @@ std::unique_ptr<Family> make_sharpvox_family() {
 }
 #endif
 
+#ifndef SVS_HAVE_BESTSPEECH
+std::unique_ptr<Family> make_bestspeech_family() {
+    std::vector<VoiceEntry> v;
+    for (int i = 0; i < 6; ++i) v.push_back({kBestBase + i, "BeSTspeech " + std::to_string(i + 1)});
+    return std::make_unique<Absent>("BeSTspeech", v);
+}
+#endif
+
 #ifndef SVS_HAVE_MICROSOFT
 std::unique_ptr<Family> make_microsoft_family() {
     const char *names[] = {"Sam", "Mike", "Mary"};
