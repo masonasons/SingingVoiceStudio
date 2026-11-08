@@ -70,7 +70,8 @@ std::vector<float> psola(const std::vector<float> &src, double rate, const F0Tra
 //: jittered. Each mark is put one period on from the last where the period
 //: after it best matches the one before (to a fraction of a sample, by a
 //: parabola through the correlations), and the grains are read and laid
-//: down between samples. Eloquence is retuned through this one.
+//: down between samples. Eloquence and the Prose 2000 are retuned through
+//: this one.
 std::vector<float> psola_matched(const std::vector<float> &src, double rate, const F0Track &f0, size_t length,
                                  const std::function<double(double)> &source_time,
                                  const std::function<double(double)> &target_hz);

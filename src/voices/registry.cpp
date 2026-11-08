@@ -17,6 +17,7 @@ Registry::Registry() {
     families_.push_back(make_macintalk_family());
     families_.push_back(make_eloquence_family());
     families_.push_back(make_bestspeech_family());
+    families_.push_back(make_prose_family());
     families_.push_back(make_sharpvox_family());
     families_.push_back(make_gm_family());
 }
@@ -70,6 +71,7 @@ Family *Registry::family_of(int voice_id) {
         if (base == kMacinTalkBase && f->name() == "MacinTalk") return f.get();
         if (base == kEloquenceBase && f->name() == "Eloquence") return f.get();
         if (base == kBestBase && f->name() == "BeSTspeech") return f.get();
+        if (base == kProseBase && f->name() == "Prose 2000") return f.get();
         if (base == kSharpVoxBase && f->name() == "SharpVox") return f.get();
         if (base == kGmBase && f->name() == "GM Soundbank") return f.get();
     }

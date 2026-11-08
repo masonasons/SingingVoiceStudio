@@ -195,7 +195,7 @@ $status = & (Join-Path $Out "svs.exe") --version
 Remove-Item Env:SVS_ONLY_BESIDE
 $status | ForEach-Object { Write-Host "   $_" }
 foreach ($line in $status) {
-    if ($line -match "^(VocalWriter|DECtalk|SSI-263|Microsoft|SharpVox|BeSTspeech|Eloquence|GM Soundbank): " -and $line -notmatch "voices ready") {
+    if ($line -match "^(VocalWriter|DECtalk|SSI-263|Microsoft|SharpVox|BeSTspeech|Eloquence|Prose 2000|GM Soundbank): " -and $line -notmatch "voices ready") {
         Warn "engine not ready: $line"
     }
     # MacinTalk's data is the user's own (Panthera's), never in the zip, so it

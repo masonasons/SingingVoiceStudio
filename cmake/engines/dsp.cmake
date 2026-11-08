@@ -1,6 +1,7 @@
 # The retiming and retuning of speech to a score (src/voices/macintalk_dsp.cpp),
-# for a Mac's MacinTalk, which can only speak, and the retuning of Eloquence,
-# which sings on whole-sample periods. One library, whichever of them is built.
+# for a Mac's MacinTalk, which can only speak, and the retuning of the engines
+# that sing on whole-sample periods, Eloquence and the Prose 2000. One library,
+# whichever of them is built.
 #
 # Included by the engines' own cmake/engines/<name>.cmake.
 if(NOT TARGET svs_dsp)

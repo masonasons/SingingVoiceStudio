@@ -19,3 +19,6 @@
 [submodule "third_party/openevv"]
 	path = third_party/openevv
 	url = https://github.com/Mudb0y/openevv
+[submodule "third_party/prose2000_reborn"]
+	path = third_party/prose2000_reborn
+	url = https://github.com/rommix0/prose2000_reborn

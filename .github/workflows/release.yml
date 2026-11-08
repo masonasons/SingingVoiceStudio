@@ -103,7 +103,7 @@ jobs:
           $env:SVS_ONLY_BESIDE = "1"
           '{"format": "vocalwriter-studio", "version": 2, "bpm": 100, "tracks": [{"name": "Voice 1", "notes": [{"phonemes": ["d", "EY"], "pitch": 67, "beats": 1.0}, {"phonemes": ["z", "IY"], "pitch": 65, "beats": 1.0}]}]}' |
             Set-Content -Encoding ascii "$env:RUNNER_TEMP\check.vws"
-          foreach ($voice in @("Robert", "DECtalk Betty", "SSI-263", "Microsoft Sam", "SharpVox Paul", "BeSTspeech 1", "Eloquence Reed")) {
+          foreach ($voice in @("Robert", "DECtalk Betty", "SSI-263", "Microsoft Sam", "SharpVox Paul", "BeSTspeech 1", "Eloquence Reed", "Prose 2000 Standard")) {
             & $svs "$env:RUNNER_TEMP\check.vws" -o "$env:RUNNER_TEMP\check.wav" --voice $voice
             if ($LASTEXITCODE -ne 0) { throw "$voice did not sing from the zip" }
             $size = (Get-Item "$env:RUNNER_TEMP\check.wav").Length
@@ -187,7 +187,7 @@ jobs:
         env:
           # MacinTalk sings with the system's voices, which answer only in a
           # desktop session: a runner has none, so Fred is not tried here
-          SVS_CHECK_VOICES: Robert|DECtalk Betty|SSI-263|Microsoft Sam|SharpVox Paul|BeSTspeech 1
+          SVS_CHECK_VOICES: Robert|DECtalk Betty|SSI-263|Microsoft Sam|SharpVox Paul|BeSTspeech 1|Prose 2000 1
         run: |
           if [ "${{ steps.signing.outputs.signed }}" = true ]; then
             sh scripts/build_mac.sh --strict

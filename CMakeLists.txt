@@ -63,7 +63,7 @@ endif()
 # replaced by a stub that offers its voices and says it cannot sing them.
 # Eloquence keeps its memory below two gigabytes, which a Mac keeps for
 # itself, so a Mac goes without it.
-set(SVS_DEFAULT_ENGINES "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech")
+set(SVS_DEFAULT_ENGINES "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech;prose")
 if(NOT APPLE)
   list(APPEND SVS_DEFAULT_ENGINES eloquence)
 endif()
@@ -73,7 +73,8 @@ set(SVS_ENGINES "${SVS_DEFAULT_ENGINES}" CACHE STRING "the engines to build in")
 # brought up to date.
 if(SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft" OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk"
    OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox"
-   OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech")
+   OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech"
+   OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech;eloquence")
   set(SVS_ENGINES "${SVS_DEFAULT_ENGINES}" CACHE STRING "the engines to build in" FORCE)
 endif()
 set(SVS_ENGINE_LIBS)

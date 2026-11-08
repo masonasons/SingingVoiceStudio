@@ -81,6 +81,15 @@ std::unique_ptr<Family> make_eloquence_family() {
 }
 #endif
 
+#ifndef SVS_HAVE_PROSE
+std::unique_ptr<Family> make_prose_family() {
+    const char *names[] = {"Standard", "Deep", "High"};
+    std::vector<VoiceEntry> v;
+    for (int i = 0; i < 3; ++i) v.push_back({kProseBase + i, std::string("Prose 2000 ") + names[i]});
+    return std::make_unique<Absent>("Prose 2000", v);
+}
+#endif
+
 #ifndef SVS_HAVE_MICROSOFT
 std::unique_ptr<Family> make_microsoft_family() {
     const char *names[] = {"Sam", "Mike", "Mary"};
