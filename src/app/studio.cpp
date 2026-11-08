@@ -2748,10 +2748,11 @@ void Studio::touch(bool dirty) {
     keep_a_copy();
 }
 
-//: The project's file, or the name of the file the song was imported from
-//: until it is saved as a project, or Untitled.
+//: The song's name, its file's without the ending or that of the file it
+//: was imported from (song_name), or Untitled.
 void Studio::show_title() {
-    std::string name = !path_.empty() ? base_name(path_) : !import_name_.empty() ? import_name_ : "Untitled";
+    std::string name = song_name();
+    if (name.empty()) name = "Untitled";
     SetTitle(W((dirty_ ? "*" : "") + name + " - " + kAppName));
 }
 
