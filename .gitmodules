@@ -10,3 +10,6 @@
 [submodule "third_party/ms-sam-mike-mary-decomp"]
 	path = third_party/ms-sam-mike-mary-decomp
 	url = https://github.com/KamiKitsune420/ms-sam-mike-mary-decomp
+[submodule "third_party/SharpVoxTTS"]
+	path = third_party/SharpVoxTTS
+	url = https://github.com/dectalk/SharpVoxTTS

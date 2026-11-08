@@ -54,6 +54,16 @@ std::unique_ptr<Family> make_macintalk_family() {
 void set_macintalk_folder(const std::string &) {}
 #endif
 
+#ifndef SVS_HAVE_SHARPVOX
+std::unique_ptr<Family> make_sharpvox_family() {
+    const char *names[] = {"Paul", "Beth", "Chris", "Deborah", "Jack", "Jess",
+                           "John", "Matt", "Pirate", "Tommy", "Whisper"};
+    std::vector<VoiceEntry> v;
+    for (int i = 0; i < 11; ++i) v.push_back({kSharpVoxBase + i, std::string("SharpVox ") + names[i]});
+    return std::make_unique<Absent>("SharpVox", v);
+}
+#endif
+
 #ifndef SVS_HAVE_MICROSOFT
 std::unique_ptr<Family> make_microsoft_family() {
     const char *names[] = {"Sam", "Mike", "Mary"};

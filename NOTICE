@@ -14,6 +14,8 @@ It does not cover the synthesisers, which carry their own licences:
     third_party/ssi263-speech/           the SSI-263 emulation (github.com/tgeczy/ssi263-speech), MIT
     third_party/ms-sam-mike-mary-decomp/ the Microsoft TTS reconstruction
                                          (github.com/KamiKitsune420/ms-sam-mike-mary-decomp), MIT
+    third_party/SharpVoxTTS/             SharpVox TTS (github.com/dectalk/SharpVoxTTS), MIT;
+                                         compiled into the program
     third_party/nlohmann/                nlohmann/json, MIT
 
 The builds also link in libraries fetched while they build, each under its
