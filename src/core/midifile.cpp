@@ -133,15 +133,12 @@ RawTrack read_track(const unsigned char *b, size_t n) {
             need(2);
             int a = b[i], v = b[i + 1];
             if (high == 0x90 && v > 0) {
-                // the same key struck twice at once is one note
-                auto &q = sounding[{ch, a}];
-                if (!q.empty() && q.back().first == tick) q.back().second = std::max(q.back().second, v);
-                else q.push_back({tick, v});
+                sounding[{ch, a}].push_back({tick, v});
             } else if (high == 0x80 || (high == 0x90 && v == 0)) {
+                // as ConvertSMF reads it, a note lasts until its key's next
+                // release, so that ends every note of the key still sounding
                 auto &q = sounding[{ch, a}];
-                if (!q.empty()) {
-                    auto [start, vel] = q.front();
-                    q.pop_front();
+                for (const auto &[start, vel] : q) {
                     MidiNote note;
                     note.tick = start;
                     note.pitch = a;
@@ -149,6 +146,7 @@ RawTrack read_track(const unsigned char *b, size_t n) {
                     note.duration = tick - start;
                     c.notes.push_back(note);
                 }
+                q.clear();
             } else if (high == 0xE0) {
                 c.bends.push_back({tick, ((v << 7) | a) - 8192});
             } else if (high == 0xB0) {
