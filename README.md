@@ -334,7 +334,8 @@ looks it up, Shift+Enter begins a new line): each word is looked up and
 given its notes one after another, as many as its hyphens or syllables ask,
 and the list shows the words, each with its phonemes and its notes. Enter on
 one opens its Phonemes and its Notes to use, and Notes to use above the
-list follows, the notes of every word added up. That starts on what they
+list follows, the notes of every word added up; Delete takes it out, and the
+words after it move back onto its notes. That starts on what they
 come to, no more than there are from the cursor to the end of the track;
 set higher, the first words take a note more each, and set lower, the words
 at the end are left off. A word not in the dictionary sings AA, and "the"

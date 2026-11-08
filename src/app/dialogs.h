@@ -73,6 +73,7 @@ private:
     double value_beats() const;
     void build_rows(int select = 0);
     void edit_word(int i);
+    void remove_word(int i);
     void sync(int select = 0);
     void refresh_row(int i);
     void on_count(wxSpinEvent &);

@@ -907,7 +907,8 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+A on a track  select every track",
         "Ctrl+W  add a word after the selected note, or at the end",
         "Ctrl+Shift+W  add a word to the notes already there, from the selected one on",
-        "Ctrl+Shift+X  add a text, words divided by spaces, to the notes already there, from the selected one on",
+        "Ctrl+Shift+X  add a text, words divided by spaces, to the notes already there, from the selected one on. "
+        "In its list of words Enter opens a word, and Delete takes it out, the words after it moving back onto its notes",
         "Ctrl+N  add a note after the selected note, or at the end",
         "Ctrl+R  add a rest, a silent break",
         "Ctrl+Shift+R  rest to the end of the bar",
