@@ -9,6 +9,7 @@
 
 #include <wx/version.h>
 
+#include "audio/decode.h"
 #include "audio/mixer.h"
 #include "core/paths.h"
 #include "core/project.h"
@@ -116,8 +117,9 @@ Reverb parse_reverb(const std::string &text) {
     return {room, wet};
 }
 
-//: A project, a VocalWriter song or a MIDI file, the MIDI imported exactly as
-//: the window does it. `slot`: the SoundFont that plays the parts not sung,
+//: A project, a VocalWriter song, a MIDI file or a sound file, the MIDI
+//: imported and the sound file put on a backing track exactly as the window
+//: does it. `slot`: the SoundFont that plays the parts not sung,
 //: or -1 for the GM Soundbank (soundbank_slot).
 Song open_song(const std::string &path, double close_rests, bool sing_all, bool remove_velocities,
                bool remove_volumes, bool plain_held, bool close_word_rests, int slot) {
@@ -131,6 +133,11 @@ Song open_song(const std::string &path, double close_rests, bool sing_all, bool 
                 if (t.voice_id != was) t.voice_name.reset();
             }
         return got.song;
+    }
+    if (is_audio_file(path)) {
+        std::string why;
+        if (!probe_audio(path, &why)) throw std::runtime_error(why);
+        return backing_song(path);
     }
     if (!is_midi_file(path)) return load_project(path);
     std::vector<std::string> names, played;
@@ -223,7 +230,8 @@ std::string usage() {
            "           [--sing-all] [--remove-velocities] [--remove-volumes]\n"
            "           [--list-voices] [--list-tracks] [--pronounce WORD...] [--version] [-q]\n"
            "\n"
-           "Sing a Singing Voice Studio project, a VocalWriter song (.trk) or a MIDI file.\n"
+           "Sing a Singing Voice Studio project, a VocalWriter song (.trk) or a MIDI file,\n"
+           "or open a sound file as a song with it on a backing track.\n"
            "\n"
            "what to write:\n"
            "  -o, --output FILE     render the whole song to this file: WAV, or FLAC or\n"

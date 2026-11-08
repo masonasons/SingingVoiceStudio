@@ -270,6 +270,7 @@ private:
     void on_append(wxCommandEvent &);
     void take_midi(const std::string &path, bool append);
     void import_vocalwriter(const std::string &path);
+    void open_sound(const std::string &path);
     void cannot_load(const std::string &path, const std::string &why);
     void imported_words(std::vector<ImportedPart> parts,
                         const std::map<std::string, std::vector<std::string>> &found, size_t pending);

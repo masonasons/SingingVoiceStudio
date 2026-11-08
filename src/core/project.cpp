@@ -822,6 +822,22 @@ Song fresh_song() {
     return song;
 }
 
+Track backing_track(const std::string &path) {
+    Track t;
+    t.audio = path;
+    t.name = base_name(strip_extension(path));
+    t.volume = 50;
+    return t;
+}
+
+Song backing_song(const std::string &path) {
+    Song song = fresh_song();
+    Track voice;
+    voice.name = "Voice 1";
+    song.tracks = {voice, backing_track(path)};
+    return song;
+}
+
 // -- MIDI ---------------------------------------------------------------------
 
 namespace {

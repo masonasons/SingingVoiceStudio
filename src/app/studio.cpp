@@ -1247,12 +1247,15 @@ void Studio::on_track_backing(wxCommandEvent &) {
     undoable("add backing track", [&] {
         wxFileDialog pick(this, "Backing track", "", "", kAudioWildcard, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
         if (pick.ShowModal() != wxID_OK) return;
-        Track t;
-        t.audio = U(pick.GetPath());
-        t.name = base_name(strip_extension(t.audio));
-        // a finished recording is far louder than a voice singing alone
-        t.volume = 50;
+        std::string why;
+        if (!probe_audio(U(pick.GetPath()), &why)) {
+            cannot_load(U(pick.GetPath()), why);
+            return;
+        }
+        Track t = backing_track(U(pick.GetPath()));
         song_.tracks.insert(song_.tracks.begin() + current_ + 1, t);
+        // a song with no name yet is named after it, as after an import
+        if (path_.empty() && import_name_.empty()) import_name_ = t.name;
         touch();
         sync_tracks(current_ + 1);
         sync();
@@ -2807,11 +2810,18 @@ void Studio::open_project(const std::string &path) {
         take_midi(path, false);
         return;
     }
+    if (is_audio_file(path)) {
+        open_sound(path);
+        return;
+    }
     Song song;
     try {
         song = load_project(path);
     } catch (const std::exception &e) {
-        say(W("cannot open " + base_name(path) + ": " + e.what()));
+        // anything not named as a project is not a file this program opens
+        cannot_load(path, extension_lower(path) == kProjectSuffix
+                              ? std::string(e.what())
+                              : "it is not a project, a MIDI file, a VocalWriter song or a sound file");
         return;
     }
     double bpm = song.bpm;
@@ -3150,8 +3160,24 @@ void Studio::import_vocalwriter(const std::string &path) {
     to_tracks();
 }
 
-//: A MIDI file or VocalWriter song that could not be read: said in a box to
-//: be put away with OK, with the system's critical stop, and in Messages.
+//: A sound file opened as a song: a new song named after it, the file on a
+//: backing track under Voice 1, as Add backing track would put it there.
+void Studio::open_sound(const std::string &path) {
+    std::string why;
+    if (!probe_audio(path, &why)) {
+        cannot_load(path, why);
+        return;
+    }
+    take(backing_song(path), "");
+    import_name_ = base_name(strip_extension(path));
+    show_title();
+    say(W("opened " + base_name(path) + " as a backing track under Voice 1, at half volume, from the start of "
+          "the song"));
+    to_tracks();
+}
+
+//: A file that could not be opened or imported: said in a box to be put
+//: away with OK, with the system's critical stop, and in Messages.
 void Studio::cannot_load(const std::string &path, const std::string &why) {
     std::string said = base_name(path) + " could not be loaded: " + why + ".";
     say(W(said));

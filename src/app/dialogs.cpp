@@ -2024,13 +2024,20 @@ void BackingDialog::on_browse(wxCommandEvent &) {
     path_->SetFocus();
 }
 
-//: A file that is not there is said now, while it can still be put right.
+//: A file that is not there, or is not a sound file, is said now, while it
+//: can still be put right.
 void BackingDialog::on_ok(wxCommandEvent &evt) {
     double v;
+    std::string why;
     if (!file_exists(file())) {
         wxMessageBox(file().empty() ? wxString("Choose the file the backing track plays.")
                                     : W("There is no file " + file() + "."),
                      "Backing track", wxOK | wxICON_ERROR, this);
+        path_->SetFocus();
+        path_->SelectAll();
+    } else if (!probe_audio(file(), &why)) {
+        wxMessageBox(W(base_name(file()) + " cannot be played: " + why + "."), "Backing track",
+                     wxOK | wxICON_ERROR, this);
         path_->SetFocus();
         path_->SelectAll();
     } else if (!read_number(start_->GetValue(), &v)) {

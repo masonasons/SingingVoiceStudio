@@ -70,6 +70,14 @@ same moment; Export audio includes it, Export tracks leaves it out (it is a file
 already). The project saves where the file is; a project sent along with its
 file in the same folder finds it there. VocalWriter Studio reads such a
 project too, the backing track as a part with no notes.
+A song with no name yet is named after the backing track added to it, as an
+imported song is after its file. A sound file opened from Explorer or on the
+command line starts a new song named after it, the file on a backing track
+under Voice 1; a file of any other kind the program does not open is said so
+in a box, as a MIDI file or VocalWriter song that cannot be read is. A sound
+file is known by how it begins as well as by its name, so one that is not
+what its name says, a program renamed to .flac, is refused in the same way,
+and Add backing track and the backing track's own window refuse it too.
 
 **A controller** (Note > Add controller, Ctrl+Shift+C) is a row among the
 notes that takes no time and is sung by nobody: a change from where it stands
