@@ -48,7 +48,7 @@ enum {
     ID_REMOVE_VELOCITIES, ID_APPEND, ID_OWN_PATH, ID_PLAIN_HELD, ID_FOLLOW, ID_FOLLOW_TIMER, ID_EXPORT_TIMER,
     ID_EXPORT_MIDI, ID_ADD_WORD_EXISTING, ID_OCTAVE_INSTRUMENTS, ID_ADD_TEXT, ID_REMOVE_VOLUMES,
     ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN, ID_SOUNDBANKS,
-    ID_NOTE_TO_REST,
+    ID_NOTE_TO_REST, ID_TRACK_LOUDER, ID_TRACK_QUIETER, ID_TRACK_PAN_LEFT, ID_TRACK_PAN_RIGHT,
 };
 
 //: A beat is a quarter note, so a sixteenth is a quarter of a beat: the step
@@ -57,6 +57,10 @@ const double kSixteenth = 0.25;
 //: A nudge will not take a note below a thirty-second note. The floor only
 //: refuses; it never shortens the step to fit.
 const double kMinBeats = 0.125;
+//: the steps Ctrl+Shift and the arrows move a track's volume by, in per
+//: cent, and its pan by
+const int kVolumeStep = 1;
+const int kPanStep = 1;
 //: how long the song has to stop changing before a copy is kept
 const int kRecoveryWait = 2500;
 //: how long the nudging has to stop before a note is previewed
@@ -399,6 +403,15 @@ wxMenu *Studio::track_menu() {
                   "Every note of the selected tracks up twelve semitones");
     track->Append(ID_TRACK_OCTAVE_DOWN, K("Down an octa&ve (Alt+Shift+Down on a track)"),
                   "Every note of the selected tracks down twelve semitones");
+    track->AppendSeparator();
+    track->Append(ID_TRACK_LOUDER, K("&Louder (Ctrl+Shift+Up on a track)"),
+                  W("The selected tracks' volume up " + std::to_string(kVolumeStep) + " per cent"));
+    track->Append(ID_TRACK_QUIETER, K("&Quieter (Ctrl+Shift+Down on a track)"),
+                  W("The selected tracks' volume down " + std::to_string(kVolumeStep) + " per cent"));
+    track->Append(ID_TRACK_PAN_RIGHT, K("Pan ri&ght (Ctrl+Shift+Right on a track)"),
+                  W("The selected tracks' pan " + std::to_string(kPanStep) + " to the right"));
+    track->Append(ID_TRACK_PAN_LEFT, K("Pan l&eft (Ctrl+Shift+Left on a track)"),
+                  W("The selected tracks' pan " + std::to_string(kPanStep) + " to the left"));
     return track;
 }
 
@@ -547,6 +560,10 @@ void Studio::build_menu() {
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(-kSemitone); }, ID_TRACK_TRANSPOSE_DOWN);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(kOctave); }, ID_TRACK_OCTAVE_UP);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { transpose_tracks(-kOctave); }, ID_TRACK_OCTAVE_DOWN);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { nudge_tracks(kVolumeStep, 0); }, ID_TRACK_LOUDER);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { nudge_tracks(-kVolumeStep, 0); }, ID_TRACK_QUIETER);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { nudge_tracks(0, kPanStep); }, ID_TRACK_PAN_RIGHT);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { nudge_tracks(0, -kPanStep); }, ID_TRACK_PAN_LEFT);
     on(ID_PANES, &Studio::on_panes);
     on(ID_PLAY, &Studio::on_play);
     on(ID_PLAY_PAUSE, &Studio::on_play_stop);
@@ -885,6 +902,8 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+Up or Ctrl+Down on a track  reorder the parts",
         "Alt+Up or Alt+Down on a track  transpose every note of the selected tracks a semitone, Alt+Shift+Up or "
         "Alt+Shift+Down an octave",
+        "Ctrl+Shift+Up or Ctrl+Shift+Down on a track  the volume of the selected tracks 1 per cent up or down, "
+        "Ctrl+Shift+Right or Ctrl+Shift+Left  their pan 1 to the right or left",
         "Ctrl+A on a track  select every track",
         "Ctrl+W  add a word after the selected note, or at the end",
         "Ctrl+Shift+W  add a word to the notes already there, from the selected one on",
@@ -1114,9 +1133,13 @@ void Studio::on_track_chosen() {
 void Studio::on_track_key(wxKeyEvent &evt) {
     int code = evt.GetKeyCode();
     bool plain = !(evt.ControlDown() || evt.AltDown() || evt.ShiftDown());
+    bool arrow = code == WXK_UP || code == WXK_DOWN || code == WXK_LEFT || code == WXK_RIGHT;
     wxCommandEvent e;
     if (evt.AltDown() && !evt.ControlDown() && (code == WXK_UP || code == WXK_DOWN))
         transpose_tracks((code == WXK_UP ? 1 : -1) * (evt.ShiftDown() ? kOctave : kSemitone));
+    else if (evt.ControlDown() && evt.ShiftDown() && !evt.AltDown() && arrow)
+        nudge_tracks(code == WXK_UP ? kVolumeStep : code == WXK_DOWN ? -kVolumeStep : 0,
+                     code == WXK_RIGHT ? kPanStep : code == WXK_LEFT ? -kPanStep : 0);
     else if (evt.ControlDown() && (code == WXK_UP || code == WXK_DOWN))
         move_tracks(code == WXK_UP ? -1 : 1);
     else if (evt.ControlDown() && !evt.ShiftDown() && !evt.AltDown() && code == 'A')
@@ -1187,6 +1210,38 @@ void Studio::transpose_tracks(int by) {
         std::string message = (moved.size() == 1 ? moved[0] : plural(moved.size(), "track")) + " " + how;
         if (drums) message += ", the drums left as they are";
         announce_note(W(message), tracks_list_, track_at());
+    });
+}
+
+//: Ctrl+Shift with Up and Down on a track, its volume a step up or down,
+//: and with Right and Left its pan a step to the right or left: every
+//: selected track, or the one the keyboard is on.
+void Studio::nudge_tracks(int volume, int pan) {
+    undoable(volume ? "change track volume" : "change track pan", [&] {
+        std::vector<int> rows;
+        for (int r : tracks_list_->SelectedRows())
+            if (r >= 0 && r < int(song_.tracks.size())) rows.push_back(r);
+        if (rows.empty()) rows = {track_at()};
+        size_t moved = 0;
+        for (int r : rows) {
+            Track &t = song_.tracks[size_t(r)];
+            int was_volume = t.volume, was_pan = t.pan;
+            t.volume = std::max(0, std::min(kMaxVolume, t.volume + volume));
+            t.pan = std::max(-100, std::min(100, t.pan + pan));
+            if (t.volume == was_volume && t.pan == was_pan) continue;
+            ++moved;
+            refresh_track(r);
+        }
+        const Track &t = song_.tracks[size_t(track_at())];
+        std::string now = volume ? "volume " + std::to_string(t.volume) + " per cent" : "pan " + pan_text(t.pan);
+        if (!moved) {
+            announce_note(W(now + ", as far as it goes"), tracks_list_, track_at());
+            return;
+        }
+        touch();
+        std::string how = volume ? std::to_string(std::abs(volume)) + " per cent " + (volume > 0 ? "louder" : "quieter")
+                                 : std::to_string(std::abs(pan)) + " to the " + (pan > 0 ? "right" : "left");
+        announce_note(W(rows.size() == 1 ? now : plural(moved, "track") + " " + how), tracks_list_, track_at());
     });
 }
 

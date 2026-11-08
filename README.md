@@ -540,6 +540,8 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Delete on a track | remove it, or every selected track |
 | Ctrl+A on a track | select every track |
 | Alt+Up / Alt+Down on a track | transpose every note of the selected tracks a semitone; with Shift an octave |
+| Ctrl+Shift+Up / Ctrl+Shift+Down on a track | the volume of the selected tracks 1 per cent up or down |
+| Ctrl+Shift+Right / Ctrl+Shift+Left on a track | the pan of the selected tracks 1 to the right or left |
 | Ctrl+Up / Ctrl+Down | reorder the parts, or move a note |
 | Ctrl+W / Ctrl+N / Ctrl+R | add a word / a note / a rest, after the selected note |
 | Ctrl+Shift+W | add a word to the notes already there, from the selected one on |

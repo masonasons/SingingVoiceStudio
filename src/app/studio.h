@@ -126,6 +126,7 @@ private:
     void move_tracks(int delta);
     void select_all_tracks();
     void transpose_tracks(int by);
+    void nudge_tracks(int volume, int pan);
     void on_panes(wxCommandEvent &);
     void on_app_activate(wxActivateEvent &evt);
     void come_back();
