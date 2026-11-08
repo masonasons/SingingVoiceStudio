@@ -61,13 +61,20 @@ endif()
 # called svs_<name> holding src/voices/<name>.cpp and the engine's own
 # sources, and defines SVS_HAVE_<NAME> on it. An engine that is not there is
 # replaced by a stub that offers its voices and says it cannot sing them.
-set(SVS_ENGINES "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech" CACHE STRING "the engines to build in")
+# Eloquence keeps its memory below two gigabytes, which a Mac keeps for
+# itself, so a Mac goes without it.
+set(SVS_DEFAULT_ENGINES "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech")
+if(NOT APPLE)
+  list(APPEND SVS_DEFAULT_ENGINES eloquence)
+endif()
+set(SVS_ENGINES "${SVS_DEFAULT_ENGINES}" CACHE STRING "the engines to build in")
 # A build folder made before the newer engines keeps the list it was made
 # with, as a cache does; that list was only ever the default, so it is
 # brought up to date.
 if(SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft" OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk"
-   OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox")
-  set(SVS_ENGINES "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech" CACHE STRING "the engines to build in" FORCE)
+   OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox"
+   OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech")
+  set(SVS_ENGINES "${SVS_DEFAULT_ENGINES}" CACHE STRING "the engines to build in" FORCE)
 endif()
 set(SVS_ENGINE_LIBS)
 set(SVS_ENGINE_DEFS)

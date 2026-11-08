@@ -72,6 +72,15 @@ std::unique_ptr<Family> make_bestspeech_family() {
 }
 #endif
 
+#ifndef SVS_HAVE_ELOQUENCE
+std::unique_ptr<Family> make_eloquence_family() {
+    const char *names[] = {"Reed", "Shelley", "Bobby", "Rocko", "Glen", "Sandy", "Grandma", "Grandpa"};
+    std::vector<VoiceEntry> v;
+    for (int i = 0; i < 8; ++i) v.push_back({kEloquenceBase + i, std::string("Eloquence ") + names[i]});
+    return std::make_unique<Absent>("Eloquence", v);
+}
+#endif
+
 #ifndef SVS_HAVE_MICROSOFT
 std::unique_ptr<Family> make_microsoft_family() {
     const char *names[] = {"Sam", "Mike", "Mary"};

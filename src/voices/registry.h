@@ -44,7 +44,7 @@ private:
     std::vector<std::unique_ptr<Family>> retired_;
     int soundfonts_seen_ = -1;
     //: the families before the SoundFonts', which are always there
-    static constexpr size_t kBuiltInFamilies = 8;
+    static constexpr size_t kBuiltInFamilies = 9;
     //: each SoundFont family's first voice, in order after those
     std::vector<int> soundfont_bases_;
     std::vector<VoiceListing> cache_;

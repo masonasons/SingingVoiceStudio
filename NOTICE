@@ -22,6 +22,12 @@ It does not cover the synthesisers, which carry their own licences:
                                          src/data/1995.c, which are Berkeley Speech
                                          Technologies' and later HumanWare's and not under
                                          the MIT licence (see its LICENSE)
+    third_party/openevv/                 OpenEVV, the Eloquence reimplementation
+                                         (github.com/Mudb0y/openevv), MIT; compiled into the
+                                         program with its US English, lang/enus, which is
+                                         transcribed from IBM's Embedded ViaVoice and is IBM's,
+                                         not under the MIT licence, but for its dictionary
+                                         (see its NOTICE)
     third_party/nlohmann/                nlohmann/json, MIT
 
 The builds also link in libraries fetched while they build, each under its

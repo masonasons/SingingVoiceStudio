@@ -11,7 +11,7 @@
 //     3000 -   3999   Microsoft Sam, Mike and Mary, and the SAPI 4 voice modes
 //     4000 -   4999   MacinTalk: Apple's voices from Mac OS X 10.4 to 10.7, a
 //                     hundred numbers to each generation
-//     5000 -   5999   kept for engines still to come that sing
+//     5000 -   5999   Eloquence
 //     6000 -   6999   BeSTspeech
 //     7000 -   7999   kept for engines still to come that sing
 //     8000 -   8999   SharpVox
@@ -44,6 +44,7 @@ enum : int {
     kSsi263Base = 2000,
     kMicrosoftBase = 3000,
     kMacinTalkBase = 4000,
+    kEloquenceBase = 5000,
     kBestBase = 6000,
     kSharpVoxBase = 8000,
     kGmBase = 100000,
@@ -127,6 +128,7 @@ std::unique_ptr<Family> make_microsoft_family();
 std::unique_ptr<Family> make_macintalk_family();
 std::unique_ptr<Family> make_sharpvox_family();
 std::unique_ptr<Family> make_bestspeech_family();
+std::unique_ptr<Family> make_eloquence_family();
 std::unique_ptr<Family> make_gm_family();
 
 //: Where Panthera is, as the user has named it in the settings: NVDA's

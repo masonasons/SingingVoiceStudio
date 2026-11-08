@@ -3,7 +3,7 @@
 VocalWriter Studio rebuilt in C++ and wxWidgets, with more singers in it, for
 Windows and macOS. The window, the menus, the keys, the dialogs, the messages
 and the project files are derived from VocalWriter Studio; what is new is that a track can be sung by any of
-seven synthesisers, or played by VocalWriter's own General MIDI instruments or
+eight synthesisers, or played by VocalWriter's own General MIDI instruments or
 by SoundFonts:
 
 | engine | voices | numbers | what it is |
@@ -13,6 +13,7 @@ by SoundFonts:
 | **SSI-263** | SSI-263, Deep, Bright, Child | 2000 - 2003 | the chip itself, driven at register level (github.com/tgeczy/ssi263-speech) |
 | **Microsoft** | Sam, Mike, Mary, each plain, in Hall, in Stadium, in Space, Whisper, RoboSoft One to Six | 3000 - 3050 | the SAPI 5 engine rebuilt in C, with the SAPI 4 voice modes (github.com/KamiKitsune420/ms-sam-mike-mary-decomp) |
 | **MacinTalk** | Agnes, Albert, Bad News, Bahh, Bells, Boing, Bruce, Bubbles, Cellos, Deranged, Fred, Good News, Hysterical, Junior, Kathy, Pipe Organ, Princess, Ralph, Trinoids, Vicki, Victoria, Whisper, Zarvox, from each of Mac OS X 10.4 Tiger, 10.5 Leopard, 10.6 Snow Leopard and 10.7 Lion, and Alex from 10.5 on | 4000 - 4022, 4100 - 4123, 4200 - 4223, 4300 - 4323 | Apple's own engines: on Windows run by Panthera's host (github.com/tgeczy/panthera-speech) and sung through Apple's TUNE notation; on a Mac the system's own voices, spoken from phonemes and retuned to the score (see below) |
+| **Eloquence** | Reed, Shelley, Bobby, Rocko, Glen, Sandy, Grandma, Grandpa | 5000 - 5007 | Eloquent Technology's formant synthesiser, later IBM's ViaVoice TTS, the voice of JAWS, its US English reimplemented in C (github.com/Mudb0y/openevv), compiled in; its frames are laid out again to the notes and synthesised by its own Klatt synthesiser (not on macOS) |
 | **BeSTspeech** | BeSTspeech 1 to 6 | 6000 - 6005 | Berkeley Speech Technologies' diphone synthesiser of HumanWare's Keynote GOLD, its 1995 English build reimplemented in C (github.com/Mudb0y/openbst), compiled in; its frames are laid out again to the notes, one pitch period at a time |
 | **SharpVox** | Paul, Beth, Chris, Deborah, Jack, Jess, John, Matt, Pirate, Tommy, Whisper | 8000 - 8010 | a Klatt formant synthesiser with DECtalk's phonemes (github.com/dectalk/SharpVoxTTS), compiled in and sung through its singing layer with the shared pitch curve in every frame |
 | **GM Soundbank** | the 128 General MIDI instruments and a drum kit | 100000 - 100127, 100128 | VocalWriter 2.0's own instrument bank and wavetable synthesiser, which played its MIDI tracks (see below) |
@@ -45,7 +46,8 @@ and one shared pitch curve (written note, bend, detune, portamento, vibrato),
 each in its own terms: DECtalk a pitch per phoneme in Hz, the SSI-263 its
 inflection register every 32 samples, Microsoft's vocoder twenty pitch knots
 per acoustic unit, SharpVox a pitch in every 5 ms frame, BeSTspeech a pitch
-period in sixteenths of a sample on every one of its frames. A new song, and one
+period in sixteenths of a sample on every one of its frames, Eloquence a whole
+period in every 5 ms frame, retuned to the curve afterwards. A new song, and one
 imported from MIDI, starts with the
 portamento and reverb VocalWriter's own songs have: a portamento of 40, and
 reverb room 40 at 24 per cent.
@@ -354,7 +356,8 @@ again at once, as it is now.
 
 None of the synthesisers' data is in this program, apart from DECtalk on
 Windows and the SSI-263's phoneme ROM, which are compiled in. SharpVox needs no
-data at all, and BeSTspeech's tables are compiled in. The rest is looked for
+data at all, and BeSTspeech's tables and Eloquence's language are compiled in.
+The rest is looked for
 beside the executable, the folder above it, the source tree, and `%SVS_DATA%`
 (on macOS also the bundle's `Contents/Resources` and the folder the `.app`
 sits in):
@@ -446,9 +449,13 @@ libvorbis, at pinned releases, for Export audio (cmake/xiph.cmake), and
 TinySoundFont, at a pinned commit, for the SoundFonts:
 
 ```
-pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-python git
 sh build.sh
 ```
+
+Python 3 is for Eloquence, whose build writes its rules and dictionary out of
+their text with its own tools (cmake/engines/eloquence.cmake); `-DSVS_ENGINES`
+without `eloquence` builds without it, and without Python.
 
 That gives `build\SingingVoiceStudio.exe`, the editor, and `build\svs.exe`, the
 same program as a console program. Both are linked statically and need no
@@ -611,7 +618,7 @@ src/voices/    singer.h (what an engine is asked to do), the engines, the shared
                pitch curve; soundfont.cpp plays SoundFonts through TinySoundFont
 engine/        VocalWriter's synthesiser in C (VocalWriterC)
 third_party/   DECtalk, the SSI-263, Microsoft Sam's reconstruction, SharpVox,
-               BeSTspeech, nlohmann/json
+               BeSTspeech, Eloquence, nlohmann/json
 scripts/       the Windows build (build_all.ps1, build_dectalk.ps1) and the macOS
                build (build_mac.sh, build_dectalk_mac.sh)
 tests/engines/ a standalone sing test for each engine
@@ -620,8 +627,9 @@ tests/engines/ a standalone sing test for each engine
 ## Licences
 
 The code here is MIT, as VocalWriter Studio's is. VocalWriter 2.0 and its data
-are KAE Labs'; DECtalk, the SSI-263 emulation, the Sam reconstruction, SharpVox
-and openbst carry their own licences in `third_party/`, and BeSTspeech's tables,
-compiled in from openbst, are Berkeley Speech Technologies' and later
-HumanWare's (see its LICENSE). Microsoft's voice files are Microsoft's
+are KAE Labs'; DECtalk, the SSI-263 emulation, the Sam reconstruction, SharpVox,
+openbst and OpenEVV carry their own licences in `third_party/`, and BeSTspeech's
+tables, compiled in from openbst, are Berkeley Speech Technologies' and later
+HumanWare's (see its LICENSE), and Eloquence's US English, compiled in from
+OpenEVV, IBM's (see its NOTICE). Microsoft's voice files are Microsoft's
 and are not included.

@@ -5,7 +5,7 @@
 #   sh build.sh              everything, into build/
 #   sh build.sh clean        start again
 #
-# Needs: pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+# Needs: pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-python git
 # (wxWidgets is fetched and built from source by CMake, at a pinned master commit.)
 # DECtalk is compiled in; scripts/build_dectalk.ps1 -DictionaryOnly builds its
 # dictionary from its word list with Visual Studio first, if wanted.

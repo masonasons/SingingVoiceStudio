@@ -16,3 +16,6 @@
 [submodule "third_party/openbst"]
 	path = third_party/openbst
 	url = https://github.com/Mudb0y/openbst
+[submodule "third_party/openevv"]
+	path = third_party/openevv
+	url = https://github.com/Mudb0y/openevv
