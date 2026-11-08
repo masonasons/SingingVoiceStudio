@@ -13,6 +13,7 @@
 #include <wx/filedlg.h>
 #include <wx/progdlg.h>
 #include <wx/textdlg.h>
+#include <wx/tokenzr.h>
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -962,7 +963,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "Ctrl+Shift+V  whether VocalWriter's voices are sung through its own sequencer, sample for sample as "
         "VocalWriter 2.0 sang them, or phrase by phrase as the other engines sing",
         "Ctrl+Shift+S  export the whole song as one WAV, FLAC or Ogg Vorbis file",
-        "Ctrl+Shift+T  export every track to its own WAV",
+        "Ctrl+Shift+T  export every track to its own WAV, FLAC or Ogg Vorbis file",
         "Ctrl+Shift+M  export the song as a MIDI file, as VocalWriter did: the channels are asked first",
         "Enter on a note edits it",
     };
@@ -2248,13 +2249,18 @@ std::shared_ptr<const std::vector<float>> Studio::ticked(const Mixed &res) const
     return y;
 }
 
-void Studio::render(const RenderRequest &req, const std::string &out, std::function<void(RenderResult)> done) {
+//: The song written to `out` on the worker, with `progress` told how far it
+//: has got (Mixer::render).
+void Studio::render(const RenderRequest &req, const std::string &out, std::function<bool(double)> progress,
+                    std::function<void(RenderResult)> done) {
     std::shared_ptr<Mixer> mixer = mixer_;
-    worker_->ask<RenderResult>([mixer, req, out] { return mixer->render(req, out); },
+    worker_->ask<RenderResult>([mixer, req, out, progress] { return mixer->render(req, out, progress); },
                                [this, done](RenderResult res) {
                                    // a failed render still has to come back, or
-                                   // whatever asked would wait for ever
-                                   if (!res.ok && !res.error.empty()) say("engine error: " + W(res.error));
+                                   // whatever asked would wait for ever; one
+                                   // given up is said by whatever asked
+                                   if (!res.ok && !res.cancelled && !res.error.empty())
+                                       say("engine error: " + W(res.error));
                                    done(res);
                                });
 }
@@ -2521,16 +2527,7 @@ void Studio::on_export(wxCommandEvent &) {
         save_settings(settings_);
     }
     say(W("rendering to " + base_name(path)));
-    // A window that stays until the file is written, so the program is not
-    // closed under it, and that can give the export up.
-    rendering_ = true;
-    mi_play_->Enable(false);
-    auto cancel = std::make_shared<std::atomic<bool>>(false);
-    export_cancel_ = cancel;
-    export_shown_ = 0;
-    exporting_ = new wxProgressDialog("Export audio", W("Exporting " + base_name(path)), 1000, this,
-                                      wxPD_APP_MODAL | wxPD_CAN_ABORT | wxPD_ELAPSED_TIME | wxPD_REMAINING_TIME);
-    export_timer_.Start(kExportPoll);
+    auto cancel = open_export_window("Export audio", "Exporting " + base_name(path));
     std::shared_ptr<Mixer> mixer = mixer_;
     RenderRequest req = request();
     worker_->ask<RenderResult>(
@@ -2541,6 +2538,37 @@ void Studio::on_export(wxCommandEvent &) {
             });
         },
         [this, path](RenderResult res) { exported(res, path); });
+}
+
+//: A window that stays until the export is written, so the program is not
+//: closed under it, and that can give the export up: Export audio's, and
+//: Export tracks' for all the tracks, its bar across them all. It returns
+//: the flag Cancel sets.
+std::shared_ptr<std::atomic<bool>> Studio::open_export_window(const std::string &title,
+                                                              const std::string &message) {
+    rendering_ = true;
+    mi_play_->Enable(false);
+    auto cancel = std::make_shared<std::atomic<bool>>(false);
+    export_cancel_ = cancel;
+    export_shown_ = 0;
+    // hiding itself at the end, where it would otherwise wait for Close
+    exporting_ = new wxProgressDialog(W(title), W(message), 1000, this,
+                                      wxPD_APP_MODAL | wxPD_AUTO_HIDE | wxPD_CAN_ABORT | wxPD_ELAPSED_TIME |
+                                          wxPD_REMAINING_TIME);
+    export_timer_.Start(kExportPoll);
+    return cancel;
+}
+
+//: The export's window gone, its bar at the end first if all of it was
+//: written (`full`), and the program free to play again.
+void Studio::close_export_window(bool full) {
+    export_timer_.Stop();
+    if (full && exporting_) exporting_->Update(1000);
+    delete exporting_;
+    exporting_ = nullptr;
+    export_cancel_.reset();
+    rendering_ = false;
+    mi_play_->Enable(true);
 }
 
 //: How far the export has got, 0 to 1, onto its window; below 0 only looks
@@ -2554,12 +2582,7 @@ void Studio::export_progress(double done) {
 //: The export is over, written or given up: its window goes, and what
 //: happened is said -- with the system's asterisk when it was written.
 void Studio::exported(const RenderResult &res, const std::string &path) {
-    export_timer_.Stop();
-    delete exporting_;
-    exporting_ = nullptr;
-    export_cancel_.reset();
-    rendering_ = false;
-    mi_play_->Enable(true);
+    close_export_window(res.ok);
     if (!res.ok) {
         say(res.cancelled ? W("export cancelled: " + base_name(path) + " was not written")
                           : W("could not write " + base_name(path) + (res.error.empty() ? "" : ": " + res.error)));
@@ -2616,19 +2639,37 @@ void Studio::on_export_tracks(wxCommandEvent &) {
         say("nothing to export: no track has any notes in it");
         return;
     }
+    // the kind of file, as Export audio's file box chooses it: the one
+    // chosen last by either to begin with
+    wxArrayString kinds;
+    wxStringTokenizer wildcard(kExportWildcard, "|");
+    for (int k = 0; wildcard.HasMoreTokens(); ++k) {
+        wxString part = wildcard.GetNextToken();
+        if (k % 2 == 0) kinds.Add(part);
+    }
+    int kind = 0;
+    for (int k = 0; k < kExportKinds; ++k)
+        if (settings_.export_format == kExportExtensions[k]) kind = k;
+    wxSingleChoiceDialog format(this, "Write each track as", "Export tracks", kinds);
+    format.SetSelection(kind);
+    if (format.ShowModal() != wxID_OK) return;
+    kind = std::max(0, std::min(kExportKinds - 1, format.GetSelection()));
     wxDirDialog dlg(this, "Export each track into this folder");
     if (dlg.ShowModal() != wxID_OK) return;
+    if (settings_.export_format != kExportExtensions[kind]) {
+        settings_.export_format = kExportExtensions[kind];
+        save_settings(settings_);
+    }
     std::string folder = U(dlg.GetPath());
     std::string base = path_.empty() ? "song" : base_name(strip_extension(path_));
     auto jobs = std::make_shared<std::vector<std::pair<Track, std::string>>>();
-    for (const auto &j : export_jobs(song_.tracks, folder, base)) jobs->push_back({*j.first, j.second});
+    for (const auto &j : export_jobs(song_.tracks, folder, base, kExportExtensions[kind]))
+        jobs->push_back({*j.first, j.second});
     std::vector<std::string> silent;
     auto heard_now = audible(song_.tracks);
     for (const Track &t : song_.tracks)
         if (!t.notes.empty() && std::find(heard_now.begin(), heard_now.end(), &t) == heard_now.end())
             silent.push_back(t.name);
-    rendering_ = true;
-    mi_play_->Enable(false);
     say(W("exporting " + plural(jobs->size(), "track") + " into " + folder));
     if (!silent.empty()) {
         std::string names;
@@ -2636,34 +2677,56 @@ void Studio::on_export_tracks(wxCommandEvent &) {
         say(W("including " + names + ", which " + (silent.size() == 1 ? "is" : "are") +
               " silent in the song at the moment"));
     }
+    open_export_window("Export tracks", "Exporting " + plural(jobs->size(), "track"));
     export_track(jobs, 0, 0);
 }
 
 //: One track, then the next: the engines do one at a time, and each one is
-//: worth saying out loud.
+//: worth saying out loud. The one window stays until the last is written,
+//: its bar how far all of them have got, and Cancel gives up the track being
+//: written and those after it. Only with every track written does the bar
+//: reach its end, with the system's asterisk, as Export audio's does.
 void Studio::export_track(std::shared_ptr<std::vector<std::pair<Track, std::string>>> jobs, size_t i,
                           int written) {
-    if (i >= jobs->size()) {
-        rendering_ = false;
-        mi_play_->Enable(true);
-        size_t failed = jobs->size() - size_t(written);
-        say(W("exported " + std::to_string(written) + " of " + plural(jobs->size(), "track") +
-              (failed ? ", " + std::to_string(failed) + " failed" : "")));
+    bool cancelled = export_cancel_ && *export_cancel_;
+    if (i >= jobs->size() || cancelled) {
+        bool all = !cancelled && size_t(written) == jobs->size();
+        close_export_window(all);
+        size_t failed = i - size_t(written);
+        if (all) {
+#ifdef __WXMSW__
+            ::MessageBeep(MB_ICONASTERISK);
+#endif
+        }
+        say(W((cancelled ? "export cancelled: exported " : "exported ") + std::to_string(written) + " of " +
+              plural(jobs->size(), "track") + (failed ? ", " + std::to_string(failed) + " failed" : "")));
         return;
     }
     std::string path = (*jobs)[i].second;
-    say(W("rendering " + base_name(path) + ", " + std::to_string(i + 1) + " of " + std::to_string(jobs->size())));
+    std::string which = base_name(path) + ", " + std::to_string(i + 1) + " of " + std::to_string(jobs->size());
+    say(W("rendering " + which));
+    if (exporting_) exporting_->Update(export_shown_, W("Exporting " + which));
     std::vector<const Track *> one{&(*jobs)[i].first};
-    render(request(nullptr, 0.0, &one), path, [this, jobs, i, written, path](RenderResult res) {
-        int w = written;
-        if (res.ok) {
-            ++w;
-            say(W(printf_s("wrote %s, %.2f seconds", base_name(path).c_str(), res.seconds)));
-        } else {
-            say(W("could not write " + base_name(path)));
-        }
-        export_track(jobs, i + 1, w);
-    });
+    // each track its share of the window's bar
+    double share = 1.0 / double(jobs->size());
+    std::shared_ptr<std::atomic<bool>> cancel = export_cancel_;
+    render(
+        request(nullptr, 0.0, &one), path,
+        [this, cancel, i, share](double done) {
+            CallAfter([this, i, share, done] { export_progress((double(i) + done) * share); });
+            return !*cancel;
+        },
+        [this, jobs, i, written, path](RenderResult res) {
+            int w = written;
+            if (res.ok) {
+                ++w;
+                say(W(printf_s("wrote %s, %.2f seconds", base_name(path).c_str(), res.seconds)));
+            } else if (!res.cancelled) {
+                say(W("could not write " + base_name(path)));
+            }
+            // a track given up is neither written nor failed
+            export_track(jobs, res.cancelled ? i : i + 1, w);
+        });
 }
 
 // -- undo ----------------------------------------------------------------------------------

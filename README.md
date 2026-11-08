@@ -251,7 +251,11 @@ to one file, a WAV, a FLAC or an Ogg Vorbis file, as chosen in the file box
 or by the name's ending; the kind chosen last is chosen again next time. A
 FLAC holds exactly the 16-bit samples the WAV would, and Ogg Vorbis is
 written at quality 6, about 190 kbit/s in stereo. The command line writes
-whichever the name given to `-o` ends in. Export tracks writes WAVs.
+whichever the name given to `-o` ends in. Export tracks (Ctrl+Shift+T) asks
+for the kind of file first, the same three and the same one to begin with,
+then for the folder, and writes each track there as one; a window shows how
+far it has got and can give it up, and it ends with the same sound. On the
+command line, `--tracks` writes WAVs.
 
 **Export MIDI** (File > Export MIDI, Ctrl+Shift+M) writes the song as a
 type 1 Standard MIDI File, as VocalWriter's own File > Export did: 240 ticks
@@ -590,7 +594,7 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+Shift+O | whether the GM Soundbank makes good the octave a few of its instruments are off by |
 | Ctrl+Shift+V | whether VocalWriter's voices are sung through its own sequencer |
 | Ctrl+Shift+K | the Soundbank manager: SoundFonts and the default soundbank |
-| Ctrl+Shift+S / Ctrl+Shift+T | export one WAV, FLAC or Ogg Vorbis file / one WAV per track |
+| Ctrl+Shift+S / Ctrl+Shift+T | export one WAV, FLAC or Ogg Vorbis file / one per track |
 | Ctrl+Shift+M | export a MIDI file |
 
 ## From the command line

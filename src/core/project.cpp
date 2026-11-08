@@ -328,7 +328,8 @@ std::vector<BendPoint> mod_timeline(const std::vector<Note> &notes) {
 
 std::vector<std::pair<const Track *, std::string>> export_jobs(const std::vector<Track> &tracks,
                                                                const std::string &folder,
-                                                               const std::string &base) {
+                                                               const std::string &base,
+                                                               const std::string &ext) {
     std::vector<std::pair<const Track *, std::string>> jobs;
     std::set<std::string> taken;
     for (const Track &t : tracks) {
@@ -342,7 +343,7 @@ std::vector<std::pair<const Track *, std::string>> export_jobs(const std::vector
             name = stem + " " + std::to_string(k);
         }
         taken.insert(lower(name));
-        jobs.push_back({&t, join_path(folder, name + ".wav")});
+        jobs.push_back({&t, join_path(folder, name + ext)});
     }
     return jobs;
 }

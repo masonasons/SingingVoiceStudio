@@ -51,7 +51,7 @@ struct Settings {
     bool octave_instruments = false;
     //: while the song plays, every track's cursor moves to the note sung
     bool follow_playback = false;
-    //: what Export audio wrote last: ".wav", ".flac" or ".ogg"
+    //: what Export audio or Export tracks wrote last: ".wav", ".flac" or ".ogg"
     std::string export_format = ".wav";
     //: the SoundFonts loaded in the Soundbank manager
     std::vector<SoundFontFile> soundfonts;

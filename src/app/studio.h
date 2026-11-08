@@ -202,8 +202,10 @@ private:
     void on_export_midi(wxCommandEvent &);
     void export_track(std::shared_ptr<std::vector<std::pair<Track, std::string>>> jobs, size_t i,
                       int written);
+    std::shared_ptr<std::atomic<bool>> open_export_window(const std::string &title, const std::string &message);
+    void close_export_window(bool full);
     void mix(const RenderRequest &req, std::function<void(Mixed)> done);
-    void render(const RenderRequest &req, const std::string &out,
+    void render(const RenderRequest &req, const std::string &out, std::function<bool(double)> progress,
                 std::function<void(RenderResult)> done);
     void on_auto_preview(wxCommandEvent &);
     void on_panthera(wxCommandEvent &);

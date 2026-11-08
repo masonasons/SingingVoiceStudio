@@ -305,9 +305,11 @@ std::vector<BendPoint> timeline(const std::vector<Note> &notes);
 //: every note's mod wheel gathered up the same way (`semitones` holds the wheel)
 std::vector<BendPoint> mod_timeline(const std::vector<Note> &notes);
 
-//: (track, where it goes) for each track with notes, no two files alike
+//: (track, where it goes) for each track with notes, no two files alike,
+//: each ending in `ext`
 std::vector<std::pair<const Track *, std::string>> export_jobs(
-    const std::vector<Track> &tracks, const std::string &folder, const std::string &base);
+    const std::vector<Track> &tracks, const std::string &folder, const std::string &base,
+    const std::string &ext = ".wav");
 
 // -- files -----------------------------------------------------------------
 
