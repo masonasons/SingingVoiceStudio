@@ -1953,8 +1953,7 @@ void TrackDialog::fill_voices(int select) {
     int at = 0;
     for (const VoiceListing &v : engine.voices) {
         // The engine's name is in the box beside it, so it is not said again:
-        // "Betty" rather than "DECtalk Betty". A voice that is nothing but the
-        // engine's name -- the SSI-263's own -- keeps it.
+        // "Betty" rather than "DECtalk Betty".
         std::string name = short_voice_name(v.name, engine.name);
         if (v.id == select) at = int(ids_.size());
         ids_.push_back(v.id);

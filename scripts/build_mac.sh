@@ -215,7 +215,7 @@ EOF
 # (on a machine that has none) leaves Fred out with SVS_CHECK_VOICES.
 OLDIFS=$IFS
 IFS='|'
-for voice in ${SVS_CHECK_VOICES:-Robert|DECtalk Betty|SSI-263|Microsoft Sam|SharpVox Paul|BeSTspeech 1|Prose 2000 1|MacinTalk Fred}; do
+for voice in ${SVS_CHECK_VOICES:-Robert|DECtalk Betty|SSI-263 Standard|Microsoft Sam|SharpVox Paul|BeSTspeech 1|Prose 2000 1|MacinTalk Fred}; do
     IFS=$OLDIFS
     if SVS_ONLY_BESIDE=1 "$APP/Contents/MacOS/svs" "$TMP/check.vws" -o "$TMP/check.wav" --voice "$voice" > "$TMP/render.log" 2>&1 \
        && [ "$(stat -f %z "$TMP/check.wav")" -gt 40000 ]; then

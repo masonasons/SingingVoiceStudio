@@ -43,7 +43,7 @@ std::unique_ptr<Family> make_dectalk_family() {
 
 #ifndef SVS_HAVE_SSI263
 std::unique_ptr<Family> make_ssi263_family() {
-    return std::make_unique<Absent>("SSI-263", std::vector<VoiceEntry>{{kSsi263Base, "SSI-263"}});
+    return std::make_unique<Absent>("SSI-263", std::vector<VoiceEntry>{{kSsi263Base, "SSI-263 Standard"}});
 }
 #endif
 

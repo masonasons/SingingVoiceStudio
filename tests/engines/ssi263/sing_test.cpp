@@ -177,7 +177,7 @@ int main(int argc, char **argv) {
             ++failures;
             continue;
         }
-        std::string tag = v.name == "SSI-263" ? "plain" : v.name.substr(8);
+        std::string tag = v.name.substr(8);
         for (char &c : tag) c = char(std::tolower((unsigned char)c));
         struct Job {
             const char *name;
@@ -193,7 +193,7 @@ int main(int argc, char **argv) {
             write_wav(path, s.samples, 1);
             bool ok = long(s.samples.size()) == want && peak > 0.05 && peak < 0.9;
             if (!ok) ++failures;
-            std::printf("%-15s %-6s %6.3f s (curve %6.3f s)  peak %.3f  %s%s\n",
+            std::printf("%-16s %-6s %6.3f s (curve %6.3f s)  peak %.3f  %s%s\n",
                         v.name.c_str(), job.name, s.samples.size() / double(kSampleRate),
                         curve.total(), peak, ok ? "ok" : "FAIL",
                         s.stopped_short ? " stopped short" : "");

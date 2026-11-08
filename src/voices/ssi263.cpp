@@ -241,7 +241,7 @@ struct Preset {
 };
 
 const Preset kPresets[] = {
-    {0, "SSI-263", 0xE4, 5},          // 17.9 kHz
+    {0, "SSI-263 Standard", 0xE4, 5}, // 17.9 kHz
     {1, "SSI-263 Deep", 0xDC, 4},     // 13.9 kHz, and slower to move
     {2, "SSI-263 Bright", 0xE8, 6},   // 20.8 kHz, and quicker
     {3, "SSI-263 Child", 0xEC, 6},    // 25.0 kHz
