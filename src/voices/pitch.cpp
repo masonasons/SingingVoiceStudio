@@ -147,6 +147,38 @@ std::vector<float> resample_to_output(const std::vector<float> &in, double rate)
         }
         return out;
     }
+    // Going by a fraction `up` / `down` -- 10000 to 44100 is 441 / 100, the Prose 2000 -- the
+    // output samples sit at `up` phases, worked out once each in the same way: the same
+    // weights to within rounding, and some fifty times sooner than working each out again.
+    size_t up = 0, down = 0;
+    for (size_t m = 1; m <= 4096 && !up; ++m) {
+        double l = std::round(ratio * double(m));
+        if (l >= 1 && std::fabs(l / double(m) - ratio) < 1e-9 * ratio) {
+            up = size_t(l);
+            down = m;
+        }
+    }
+    if (up && up <= 16384) {
+        std::vector<double> taps(up * 2 * half);
+        for (size_t p = 0; p < up; ++p) {
+            double x = double(p) / double(up);
+            for (int t = 0; t < 2 * half; ++t) taps[p * 2 * half + size_t(t)] = weight(x - double(t - half + 1));
+        }
+        for (size_t k = 0; k < n; ++k) {
+            unsigned long long at = (unsigned long long)k * down;
+            size_t p = size_t(at % up);
+            long centre = long(at / up);
+            const double *c = &taps[p * 2 * half];
+            double acc = 0.0;
+            for (int t = 0; t < 2 * half; ++t) {
+                long j = centre - half + 1 + t;
+                if (j < 0 || j >= long(in.size())) continue;
+                acc += in[size_t(j)] * c[t];
+            }
+            out[k] = float(acc);
+        }
+        return out;
+    }
     for (size_t k = 0; k < n; ++k) {
         double x = k / ratio;
         long centre = long(std::floor(x));
