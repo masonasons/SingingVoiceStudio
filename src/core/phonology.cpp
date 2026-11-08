@@ -101,7 +101,16 @@ namespace {
 // least 110 ms. That separates y (the glide in "yes", manner 0, 75 ms) from
 // the vowels, and EL (syllabic l, manner 4, 160 ms) from l, r, w and LX.
 const int kNucleusMinMax = 110;
-const std::set<std::string> kGlides = {"l", "r", "w", "y", "LX"};
+// The consonants each glide may follow at the start of a syllable, as "pl",
+// "tr", "kw" and "my"; any other stays with the syllable before: "AO LX",
+// "r AY t".
+const std::map<std::string, std::set<std::string>> kBeforeGlide = {
+    {"l", {"p", "b", "k", "g", "f", "s"}},
+    {"LX", {"p", "b", "k", "g", "f", "s"}},
+    {"r", {"p", "b", "t", "d", "k", "g", "f", "TH", "SH"}},
+    {"w", {"t", "d", "k", "g", "s", "TH", "h"}},
+    {"y", {"p", "b", "k", "g", "f", "v", "h", "m", "n"}},
+};
 const std::set<std::string> kAfterS = {"p", "t", "k", "m", "n", "f"};
 }  // namespace
 
@@ -132,8 +141,11 @@ std::string after_glide(const std::string &vowel) { return vowel == "YU" ? "UW" 
 
 bool legal_onset(const std::vector<std::string> &syms) {
     if (syms.size() <= 1) return true;
-    if (syms.size() == 2)
-        return kGlides.count(syms[1]) || (syms[0] == "s" && kAfterS.count(syms[1]));
+    if (syms.size() == 2) {
+        auto glide = kBeforeGlide.find(syms[1]);
+        return (glide != kBeforeGlide.end() && glide->second.count(syms[0])) ||
+               (syms[0] == "s" && kAfterS.count(syms[1]));
+    }
     if (syms.size() == 3 && syms[0] == "s")
         return legal_onset({syms[1], syms[2]});
     return false;

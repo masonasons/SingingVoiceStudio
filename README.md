@@ -230,7 +230,9 @@ several notes that VocalWriter's dictionary does not know is sung as its
 pieces, if it knows each of them and none is shorter than three letters: "jail-", "birds" as jail and birds, rather than
 the letter-to-sound rules' guess at jailbirds. A letter on its own but "a" is
 its name, "D J" as d IY, JH EY, here and in Add word, and "the" before a word
-that starts with a vowel is DH IY.
+that starts with a vowel is DH IY. The consonants between two syllables open
+the second as far as a syllable can begin with them, and the rest close the
+first: "al-", "right" is AO LX, r AY t, and "coun-", "try" k UX n, t r IY.
 
 **Append MIDI** (File > Append MIDI, Ctrl+Shift+A) puts the parts of a MIDI
 file under the song's own tracks, chosen as Import chooses them; its tempo
