@@ -909,33 +909,6 @@ std::vector<TempoChange> midi_tempo_changes(const MidiFile &midi) {
     return clean_tempo_changes(out);
 }
 
-double quantise(double beats, double grid) {
-    if (!grid) return beats;
-    return std::max(grid, std::nearbyint(beats / grid) * grid);
-}
-
-const double kSixteenthGrid = 0.25;
-const double kTripletGrid = 1.0 / 12.0;
-const double kGridSlop = 1.0 / 32.0;
-
-double off_grid(double beats, double grid) { return std::fabs(beats - quantise(beats, grid)); }
-
-//: A twelfth of a beat when a real share of the lengths are triplets, which
-//: a sixteenth cannot hold; otherwise a sixteenth, as it always was.
-double midi_grid(const MidiFile &midi) {
-    double div = midi.division ? midi.division : 480;
-    int total = 0, triplets = 0;
-    for (const MidiTrack &t : midi.tracks)
-        for (const MidiNote &n : t.notes) {
-            double b = std::max(n.duration, 1L) / div;
-            ++total;
-            if (off_grid(b, kSixteenthGrid) > kGridSlop && off_grid(b, kTripletGrid) <= kGridSlop)
-                ++triplets;
-        }
-    if (!total) return kSixteenthGrid;
-    return triplets * 10 >= total ? kTripletGrid : kSixteenthGrid;
-}
-
 //: the track's bend as [(tick, semitones)], the range resolved
 std::vector<std::pair<long, double>> bend_curve(const MidiTrack &track) {
     auto ranges = track.bend_range;
@@ -1249,8 +1222,12 @@ void vocalwriter_controls(const MidiTrack &track, Beat beat, std::vector<PlayedC
     }
 }
 
+//: A part's notes are kept to VocalWriter's 240 ticks a beat, sung or
+//: played, as its MIDI import kept them.
+const double kPlayedTicks = 240.0;
+
 ImportedPart from_midi(const MidiFile &midi, const MidiTrack &track, const std::string &name,
-                       double grid, double close_rests, int *closed, const std::vector<int> &programs,
+                       double close_rests, int *closed, const std::vector<int> &programs,
                        bool close_word_rests) {
     double div = midi.division ? midi.division : 480;
     auto curve = bend_curve(track);
@@ -1261,11 +1238,12 @@ ImportedPart from_midi(const MidiFile &midi, const MidiTrack &track, const std::
     std::vector<MidiNote> ordered = track.notes;
     std::stable_sort(ordered.begin(), ordered.end(),
                      [](const MidiNote &a, const MidiNote &b) { return a.tick < b.tick; });
-    // Rounding where each note falls rather than how long each one is, and
-    // counting from the start of the file, so nothing drifts and a part that
-    // comes in late stays late.
-    double step = grid ? grid : 1.0 / div;
-    auto edge = [&](double ticks) { return long(std::lrint(ticks / div / step)); };
+    // Where each note falls rather than how long each one is, cut to a
+    // whole tick as ConvertSMF rescales it, and counting from the start of
+    // the file, so nothing drifts and a part that comes in late stays late.
+    const double step = 1.0 / kPlayedTicks;
+    float scale = float(kPlayedTicks) / float(div);
+    auto edge = [&](double ticks) { return long(std::floor(double(float(ticks) * scale))); };
     ImportedPart part;
     part.name = name;
     long at = 0;
@@ -1276,7 +1254,7 @@ ImportedPart from_midi(const MidiFile &midi, const MidiTrack &track, const std::
         long end = std::max(start + 1, edge(double(n.tick + span)));
         if (i + 1 < ordered.size()) {
             long nxt = std::max(start + 1, edge(double(ordered[i + 1].tick)));
-            long gap = std::lrint((ordered[i + 1].tick - n.tick - span) / div / step);
+            long gap = edge(double(ordered[i + 1].tick)) - edge(double(n.tick + span));
             end = gap <= 0 ? nxt : std::min(end, nxt);
         }
         if (start > at) {
@@ -1318,9 +1296,6 @@ ImportedPart from_midi(const MidiFile &midi, const MidiTrack &track, const std::
     return part;
 }
 
-//: An instrument's notes are kept to VocalWriter's 240 ticks a beat, as its
-//: MIDI import kept them, rather than to a grid.
-const double kPlayedTicks = 240.0;
 //: the shortest note that import made, in ticks
 const double kShortestPlayed = 10.0;
 
@@ -1574,7 +1549,6 @@ Imported import_midi(const std::string &path, const std::vector<std::string> &na
     MidiFile midi = read_midi(path, lyrics_on);
     auto named = named_tracks(midi, program_names);
     if (named.empty()) throw std::runtime_error("this file has no notes in it");
-    double grid = midi_grid(midi);
     Imported out;
     out.bpm = midi_tempo(midi);
     out.tempo_changes = midi_tempo_changes(midi);
@@ -1587,7 +1561,7 @@ Imported import_midi(const std::string &path, const std::vector<std::string> &na
         if (!track) throw std::runtime_error("no track named " + want);
         if (std::find(played.begin(), played.end(), want) == played.end()) {
             out.parts.push_back(
-                from_midi(midi, *track, want, grid, close_rests, &out.closed_rests, programs, close_word_rests));
+                from_midi(midi, *track, want, close_rests, &out.closed_rests, programs, close_word_rests));
             if (remove_velocities)
                 for (Note &n : out.parts.back().notes) n.velocity = 0;
             if (remove_volumes)
