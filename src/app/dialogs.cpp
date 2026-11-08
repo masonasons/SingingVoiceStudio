@@ -1902,7 +1902,8 @@ TrackDialog::TrackDialog(wxWindow *parent, Studio *studio, const Track &track)
     outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
     SetSizerAndFit(outer);
     name_->SetFocus();
-    name_->SetInsertionPointEnd();
+    // selected, so what is typed replaces the name, as in a field tabbed to
+    name_->SelectAll();
 }
 
 //: The voice box for the engine chosen, with `select` chosen in it if it is
@@ -2007,7 +2008,8 @@ BackingDialog::BackingDialog(wxWindow *parent, const Track &track)
     Bind(wxEVT_BUTTON, &BackingDialog::on_ok, this, wxID_OK);
     SetSizerAndFit(outer);
     name_->SetFocus();
-    name_->SetInsertionPointEnd();
+    // selected, so what is typed replaces the name, as in a field tabbed to
+    name_->SelectAll();
 }
 
 std::string BackingDialog::file() const {
