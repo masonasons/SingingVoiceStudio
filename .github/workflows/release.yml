@@ -187,7 +187,7 @@ jobs:
         env:
           # MacinTalk sings with the system's voices, which answer only in a
           # desktop session: a runner has none, so Fred is not tried here
-          SVS_CHECK_VOICES: Robert|DECtalk Betty|SSI-263 Standard|Microsoft Sam|SharpVox Paul|BeSTspeech 1|Prose 2000 1
+          SVS_CHECK_VOICES: Robert|DECtalk Betty|SSI-263 Standard|Microsoft Sam|SharpVox Paul|BeSTspeech 1|Prose 2000 Standard
         run: |
           if [ "${{ steps.signing.outputs.signed }}" = true ]; then
             sh scripts/build_mac.sh --strict
