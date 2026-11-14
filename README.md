@@ -74,7 +74,8 @@ starts on its beat whatever the tempo, but plays at its own speed from
 there, so changing the tempo moves the voices after that against the
 recording. A project saved with the start in seconds, as before, has it
 put on the beat the song's tempo gave it. Play from the cursor starts the file at the
-same moment; Export audio includes it, Export tracks leaves it out (it is a file
+same moment, and Space on the backing track itself plays from where it starts;
+Export audio includes it, Export tracks leaves it out (it is a file
 already). The project saves where the file is; a project sent along with its
 file in the same folder finds it there. VocalWriter Studio reads such a
 project too, the backing track as a part with no notes.
@@ -580,7 +581,7 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+G | go to a bar |
 | Ctrl+, | song settings |
 | Ctrl+Shift+P | hear a note whenever it is nudged |
-| Space | play from the cursor, or stop |
+| Space | play from the cursor, or from where a backing track starts, or stop |
 | Ctrl+Shift+F | whether every track's cursor follows the note being sung, and stays where it got to when stopped |
 | Ctrl+P / Ctrl+H / Ctrl+M / Ctrl+. | play from the start / hear one note / metronome / stop |
 | Ctrl+Shift+N | start an empty song |

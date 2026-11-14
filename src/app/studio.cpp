@@ -936,7 +936,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "On a track an instrument plays, a chord is its notes in a row, all but the last taking 0 "
         "beats; several pitches typed into a note, as C4 E4 G4, make one. Alt+Right and Alt+Left "
         "change how long a note held on its own sounds, and Ctrl+H plays the note the cursor is on",
-        "Space  play from the note the cursor is on, or stop if it is playing",
+        "Space  play from the note the cursor is on, or on a backing track from where it starts, or stop if it is playing",
         "Ctrl+P  play every track from the start",
         is_mac() ? "Option+H  hear the selected note" : "Ctrl+H  hear the selected note",
         "Ctrl+M  metronome on or off, for playing only; while the song plays it comes in or goes at once",
@@ -2355,7 +2355,9 @@ void Studio::heard(const Mixed &res) {
 
 //: Where Space starts from: the note the cursor is on. Every track starts
 //: there -- the cursor is a place in the song, and the parts stay together.
+//: On a backing track, which has no notes, where its file begins.
 double Studio::start_beats() {
+    if (track().is_backing()) return std::max(0.0, track().audio_beat);
     int i = selection();
     return i > 0 ? position(i) : 0.0;
 }
@@ -2403,8 +2405,9 @@ void Studio::start_playing(double start, bool quiet) {
         total = std::max(total, s);
     }
     // past the end: start again (a backing track runs on past the voices,
-    // but where the cursor is is where the notes are)
-    if (start >= total - 1e-9) start = 0.0;
+    // but where the cursor is is where the notes are); on a backing track
+    // Space starts where its file does, past the notes or not
+    if (start >= total - 1e-9 && !track().is_backing()) start = 0.0;
     stop_audio();          // the file cannot be written while it plays
     play_from_ = start;
     rendering_ = true;
