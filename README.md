@@ -250,6 +250,14 @@ first: "al-", "right" is AO LX, r AY t, and "coun-", "try" k UX n, t r IY.
 file under the song's own tracks, chosen as Import chooses them; its tempo
 changes and time signature take the place of the song's.
 
+A project, MIDI file, VocalWriter song or sound file opened from Explorer or
+the Finder while the program is running goes to the window already open.
+With a song open there, it asks whether to discard that song: Yes closes it,
+the copy kept for recovery with it, and opens the file as it would have
+opened on its own; No leaves the song as it was and the file unopened. A
+dialog open in the window is closed first, and the question comes after.
+Append MIDI and Add backing track are not affected.
+
 **Export audio** (File > Export audio, Ctrl+Shift+S) writes the whole song
 to one file, a WAV, a FLAC or an Ogg Vorbis file, as chosen in the file box
 or by the name's ending; the kind chosen last is chosen again next time. A

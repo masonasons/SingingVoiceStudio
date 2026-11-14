@@ -238,6 +238,14 @@ Studio::Studio(const std::string &path)
         e.Skip();
         if (e.GetActive() && returning()) CallAfter([this] { give_back_focus(); });
     });
+    // a file opened from outside under a dialog comes in once it is closed
+    Bind(wxEVT_IDLE, [this](wxIdleEvent &e) {
+        e.Skip();
+        if (outside_waiting_.empty() || dialog_open()) return;
+        std::string p;
+        p.swap(outside_waiting_);
+        open_from_outside(p);
+    });
     if (!path.empty()) {
         // a song named on the command line, or opened from the desktop
         std::string p = path;
@@ -2989,6 +2997,69 @@ void Studio::open_project(const std::string &path) {
           " notes, " + fmt_g(bpm) + " bpm"));
     to_tracks();
 }
+
+//: A file opened from Explorer or the Finder while the program runs: the
+//: song open here is given up for it only if asked, its kept copy with it.
+//: Under a dialog it waits until the dialog closes (dialog_open).
+void Studio::open_from_outside(const std::string &path) {
+    if (dialog_open()) {
+        outside_waiting_ = path;
+        return;
+    }
+    if (IsIconized()) Iconize(false);
+    Raise();
+    bool open = dirty_ || !path_.empty() || !import_name_.empty();
+    for (const Track &t : song_.tracks) open = open || !t.notes.empty() || t.is_backing();
+    if (open) {
+        std::string name = song_name();
+        if (name.empty()) name = "Untitled";
+        exclaim();
+        int answer = wxMessageBox(
+            W(base_name(path) + " was opened while " + name + " is open here" +
+              (dirty_ ? ", with changes that have not been saved" : "") + ".\n\nDiscard " + name + " and open " +
+              base_name(path) + "?"),
+            kAppName, wxYES_NO | wxICON_QUESTION, this);
+        if (answer != wxYES) {
+            say(W(base_name(path) + " was not opened; " + name + " is still open"));
+            return;
+        }
+        // given up, as closing gives it up: its kept copy is not needed
+        recovery_timer_.Stop();
+        recovery_clear();
+    }
+    open_project(path);
+}
+
+//: Whether a dialog is open in front of the window, which a song coming in
+//: would pull the song out from under.
+bool Studio::dialog_open() const {
+#ifdef __WXMSW__
+    // a message box or a file dialog disables the window without wx knowing
+    if (!::IsWindowEnabled(GetHWND())) return true;
+#endif
+    if (!IsEnabled()) return true;
+    for (wxWindow *w : wxTopLevelWindows) {
+        const wxDialog *d = dynamic_cast<const wxDialog *>(w);
+        if (d && d->IsModal()) return true;
+    }
+    return false;
+}
+
+#ifdef __WXMSW__
+//: The file a second copy of the program was started for, handed over
+//: (main.cpp); asked about once this message has been answered.
+WXLRESULT Studio::MSWWindowProc(WXUINT msg, WXWPARAM wparam, WXLPARAM lparam) {
+    if (msg == WM_COPYDATA) {
+        const COPYDATASTRUCT *data = reinterpret_cast<const COPYDATASTRUCT *>(lparam);
+        if (data && data->dwData == kHandedFile && data->lpData) {
+            std::string path(static_cast<const char *>(data->lpData), data->cbData);
+            CallAfter([this, path] { open_from_outside(path); });
+            return TRUE;
+        }
+    }
+    return wxFrame::MSWWindowProc(msg, wparam, lparam);
+}
+#endif
 
 //: A song just come in starts in the tracks list, wherever the keyboard was;
 //: after the dialogs that brought it in have given the focus back.

@@ -44,6 +44,9 @@ std::optional<double> stepped_length(double beats, bool up);
 
 constexpr int kSemitone = 1;
 constexpr int kOctave = 12;
+//: what a second copy of the program marks the file it hands the copy
+//: running with (WM_COPYDATA), "SVSO"
+constexpr unsigned long kHandedFile = 0x5356534F;
 
 class Studio : public wxFrame {
 public:
@@ -264,7 +267,13 @@ private:
     void on_open(wxCommandEvent &);
 public:
     void open_project(const std::string &path);
+    //: a file opened from Explorer or the Finder while the program runs
+    void open_from_outside(const std::string &path);
+#ifdef __WXMSW__
+    WXLRESULT MSWWindowProc(WXUINT msg, WXWPARAM wparam, WXLPARAM lparam) override;
+#endif
 private:
+    bool dialog_open() const;
     void on_save(wxCommandEvent &);
     void on_save_as(wxCommandEvent &);
     void write_project(const std::string &path);
@@ -294,6 +303,8 @@ private:
     bool rendering_ = false;
     bool discard_render_ = false;   // a new song came in while it rendered
     std::string path_;
+    //: a file opened from outside while a dialog was open, waiting for it to close
+    std::string outside_waiting_;
     bool dirty_ = false;
     Settings settings_;
     wxTimer preview_timer_, recovery_timer_, follow_timer_, export_timer_;
