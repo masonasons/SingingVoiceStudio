@@ -62,7 +62,8 @@ const NoteControl *note_control(const std::string &key) {
 namespace {
 //: Bumped only if an older file would otherwise be read wrongly. Version 2
 //: keeps the notes under `tracks`; a version 1 file is read as one track.
-const int kVersion = 2;
+//: Version 3 numbers VocalWriter's voices by program (kVocalWriterPlaces).
+const int kVersion = 3;
 const char *const kFormat = "vocalwriter-studio";
 const char *const kClipKey = "vocalwriter-studio-notes";
 //: VocalWriter's own defaults for a reverb that is asked for but not given
@@ -278,7 +279,8 @@ std::string pitch_name(int midi) {
 std::vector<const Track *> audible(const std::vector<Track> &tracks) {
     std::vector<const Track *> solo, on;
     for (const Track &t : tracks) {
-        if (t.solo && !t.mute) solo.push_back(&t);
+        // a Tempo track's solo, set before it had none, silences nothing
+        if (t.solo && !t.mute && !is_tempo_track(t)) solo.push_back(&t);
         if (!t.mute) on.push_back(&t);
     }
     return solo.empty() ? on : solo;
@@ -746,6 +748,18 @@ Song load_project(const std::string &path) {
         t.name = "Voice 1";
         song.tracks.push_back(t);
     }
+    // an older file, or VocalWriter Studio's, has VocalWriter's voices by
+    // their place in the bank
+    if (!doc.contains("version") || as_int(doc["version"], 1) < 3) {
+        auto renumber = [](std::optional<int> &id) {
+            if (id && is_vocalwriter_voice(*id)) id = vocalwriter_voice_at(*id - kVocalWriterBase);
+        };
+        for (Track &t : song.tracks) {
+            renumber(t.voice_id);
+            for (Note &n : t.notes)
+                if (n.controller) renumber(n.voice_id);
+        }
+    }
     // A backing track's file that is not where it was, but is beside the
     // project: the two were moved, or sent to someone, together.
     for (Track &t : song.tracks) {
@@ -926,22 +940,32 @@ std::vector<TempoChange> midi_tempo_changes(const MidiFile &midi) {
     return clean_tempo_changes(out);
 }
 
-//: the track's bend as [(tick, semitones)], the range resolved
+//: the track's bend as [(tick, semitones)], the range resolved: two
+//: semitones until RPN 0 first sets it, as MIDI starts, and a change of
+//: range moving a wheel already off centre, as a synthesiser hears it
 std::vector<std::pair<long, double>> bend_curve(const MidiTrack &track) {
+    // in the file's order where two fall on one tick
+    auto by_tick = [](const std::pair<long, int> &a, const std::pair<long, int> &b) { return a.first < b.first; };
     auto ranges = track.bend_range;
-    std::sort(ranges.begin(), ranges.end());
-    if (ranges.empty()) ranges.push_back({0, 2});
+    std::stable_sort(ranges.begin(), ranges.end(), by_tick);
     auto bends = track.bends;
-    std::sort(bends.begin(), bends.end());
+    std::stable_sort(bends.begin(), bends.end(), by_tick);
     std::vector<std::pair<long, double>> out;
-    for (const auto &b : bends) {
-        int span = ranges[0].second;
-        for (const auto &r : ranges) {
-            if (r.first <= b.first) span = r.second;
-            else break;
+    int span = 2, wheel = 0;
+    size_t r = 0;
+    auto ranges_to = [&](long tick, bool through) {
+        for (; r < ranges.size() && (through || ranges[r].first <= tick); ++r) {
+            if (ranges[r].second == span) continue;
+            span = ranges[r].second;
+            if (wheel != 0) out.push_back({ranges[r].first, wheel / 8192.0 * span});
         }
+    };
+    for (const auto &b : bends) {
+        ranges_to(b.first, false);
+        wheel = b.second;
         out.push_back({b.first, b.second / 8192.0 * span});
     }
+    ranges_to(0, true);
     return out;
 }
 
@@ -2247,6 +2271,21 @@ Track tempo_track(const std::vector<TempoChange> &changes, const std::vector<Sig
         at = std::max(at, c.first);
     }
     return t;
+}
+
+bool is_tempo_track(const Track &track) {
+    if (track.is_backing()) return false;
+    bool any = false;
+    for (const Note &n : track.notes) {
+        if (!n.controller) {
+            if (!n.is_rest()) return false;
+            continue;
+        }
+        // a controller that changes anything else belongs to a part
+        if (n.voice_id || n.voice_name || n.pan || !n.controls.empty()) return false;
+        any = any || n.tempo > 0 || n.sig;
+    }
+    return any;
 }
 
 std::string tempo_map_said(size_t tempos, size_t sigs) {

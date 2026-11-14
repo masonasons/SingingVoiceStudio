@@ -64,11 +64,13 @@ bool check_range(wxDialog *d, wxTextCtrl *field, const wxString &name, double lo
 }
 
 //: The voices the engine and voice boxes offer: those that can sing here,
-//: and `keep`, the one in use, so that it can still be seen and kept.
-std::vector<VoiceListing> offered(const std::vector<VoiceListing> &all, int keep) {
+//: VocalWriter's unfinished ones only if `unfinished`, and `keep`, the one
+//: in use, so that it can still be seen and kept.
+std::vector<VoiceListing> offered(const std::vector<VoiceListing> &all, int keep, bool unfinished) {
     std::vector<VoiceListing> out;
     for (const VoiceListing &v : all)
-        if (v.available || v.id == keep) out.push_back(v);
+        if ((v.available && (unfinished || !is_unfinished_vocalwriter_voice(v.id))) || v.id == keep)
+            out.push_back(v);
     return out;
 }
 
@@ -1632,7 +1634,7 @@ ControllerDialog::ControllerDialog(wxWindow *parent, Studio *studio, const Note 
     // the voice as a track's is chosen: the engine, then its voice
     int start = controller.voice_id ? *controller.voice_id : voice_before;
     // an engine or voice that cannot sing here is left out
-    voices_ = offered(voices_, start);
+    voices_ = offered(voices_, start, studio->show_unfinished());
     wxArrayString engines;
     int engine = 0;
     for (const VoiceListing &v : voices_) {
@@ -1843,14 +1845,14 @@ TrackDialog::TrackDialog(wxWindow *parent, Studio *studio, const Track &track)
     name_ = new wxTextCtrl(this, wxID_ANY, W(track.name), wxDefaultPosition, wxSize(220, -1));
     labelled(this, outer, "Name", name_);
 
-    // The engine first, then its voices: VocalWriter's bank in its own order,
+    // The engine first, then its voices: VocalWriter's by program number,
     // the people's names first and then the instruments, which sing too; then
     // DECtalk's, the SSI-263's and Microsoft's. Choosing an engine fills the
     // voice box with that engine's voices alone, so neither list is long.
     // An engine or voice that cannot sing here is left out, unless the track
     // sings with it already.
     int current = studio->track_voice_of(track);
-    for (const VoiceListing &v : offered(studio->voice_list(), current)) {
+    for (const VoiceListing &v : offered(studio->voice_list(), current, studio->show_unfinished())) {
         if (engines_.empty() || engines_.back().name != v.family) engines_.push_back({v.family, v.available, {}});
         engines_.back().voices.push_back(v);
     }
@@ -2015,6 +2017,31 @@ void TrackDialog::apply(Track &track) const {
     else track.consonants.reset();
     if (own_reverb_->GetValue()) track.reverb = Reverb{room_->GetValue(), wet_->GetValue()};
     else track.reverb.reset();
+}
+
+// -- TempoTrackDialog ----------------------------------------------------------------------
+
+TempoTrackDialog::TempoTrackDialog(wxWindow *parent, const Track &track) : wxDialog(parent, wxID_ANY, "Tempo track") {
+    wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+    wxStaticText *about = new wxStaticText(
+        this, wxID_ANY,
+        "This track holds only the song's tempo and time signature changes. It sings nothing, so it has no voice, "
+        "volume or pan; a note added to it makes it a part like any other.");
+    about->Wrap(380);
+    outer->Add(about, 0, wxALL, 8);
+    name_ = new wxTextCtrl(this, wxID_ANY, W(track.name), wxDefaultPosition, wxSize(220, -1));
+    labelled(this, outer, "Name", name_);
+    outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
+    SetSizerAndFit(outer);
+    name_->SetFocus();
+    // selected, so what is typed replaces the name, as in a field tabbed to
+    name_->SelectAll();
+}
+
+void TempoTrackDialog::apply(Track &track) const {
+    wxString name = name_->GetValue();
+    name.Trim(true).Trim(false);
+    track.name = name.empty() ? "Tempo" : U(name);
 }
 
 // -- BackingDialog ------------------------------------------------------------------------

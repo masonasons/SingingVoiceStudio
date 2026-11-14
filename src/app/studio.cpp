@@ -50,6 +50,7 @@ enum {
     ID_EXPORT_MIDI, ID_ADD_WORD_EXISTING, ID_OCTAVE_INSTRUMENTS, ID_ADD_TEXT, ID_REMOVE_VOLUMES,
     ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN, ID_SOUNDBANKS,
     ID_NOTE_TO_REST, ID_TRACK_LOUDER, ID_TRACK_QUIETER, ID_TRACK_PAN_LEFT, ID_TRACK_PAN_RIGHT,
+    ID_SHOW_UNFINISHED,
 };
 
 //: A beat is a quarter note, so a sixteenth is a quarter of a beat: the step
@@ -62,6 +63,9 @@ const double kMinBeats = 0.125;
 //: cent, and its pan by
 const int kVolumeStep = 1;
 const int kPanStep = 1;
+//: said after a Tempo track's name when asked for what it does not have
+const char *const kTempoTrackSaid = " holds only tempo and time signature changes, so it has no volume, pan, "
+                                    "mute or solo";
 //: how long the song has to stop changing before a copy is kept
 const int kRecoveryWait = 2500;
 //: how long the nudging has to stop before a note is previewed
@@ -234,6 +238,14 @@ Studio::Studio(const std::string &path)
     Bind(wxEVT_ACTIVATE, [this](wxActivateEvent &e) {
         e.Skip();
         if (e.GetActive() && returning()) CallAfter([this] { give_back_focus(); });
+    });
+    // a file opened from outside under a dialog comes in once it is closed
+    Bind(wxEVT_IDLE, [this](wxIdleEvent &e) {
+        e.Skip();
+        if (outside_waiting_.empty() || dialog_open()) return;
+        std::string p;
+        p.swap(outside_waiting_);
+        open_from_outside(p);
     });
     if (!path.empty()) {
         // a song named on the command line, or opened from the desktop
@@ -516,6 +528,11 @@ void Studio::build_menu() {
                                           "Sample for sample as VocalWriter 2.0 sang them; otherwise phrase by phrase, "
                                           "as the other engines sing");
     mi_own_path_->Check(settings_.vocalwriter_own_path);
+    mi_show_unfinished_ = prefs->AppendCheckItem(
+        ID_SHOW_UNFINISHED, K("Show &unfinished VocalWriter voices\tCtrl+Shift+U"),
+        "Offer Miles, Ellen1, Kae1, Sonny1, Ed1 and Cellos, which VocalWriter never finished, in the track "
+        "settings and controllers too");
+    mi_show_unfinished_->Check(settings_.show_unfinished_voices);
     prefs->Append(ID_PANTHERA, K("Panthera &folder..."), "Where to find Panthera, for the MacinTalk voices");
     prefs->Append(ID_SOUNDBANKS, K("Sound&bank manager...\tCtrl+Shift+K"),
                   "Load SoundFonts to play with, and choose what plays the parts of an imported song that are not sung");
@@ -591,6 +608,7 @@ void Studio::build_menu() {
     on(ID_PLAIN_HELD, &Studio::on_plain_held);
     on(ID_OCTAVE_INSTRUMENTS, &Studio::on_octave_instruments);
     on(ID_FOLLOW, &Studio::on_follow);
+    on(ID_SHOW_UNFINISHED, &Studio::on_show_unfinished);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { Close(); }, wxID_EXIT);
 }
 
@@ -779,6 +797,19 @@ void Studio::on_octave_instruments(wxCommandEvent &) {
         (kept ? "" : ", for this sitting only: the settings file could not be written"));
 }
 
+//: A setting of the program too: whether the voices VocalWriter never
+//: finished are offered in the track settings and controllers. A track or
+//: controller singing with one already keeps it, and still shows it.
+void Studio::on_show_unfinished(wxCommandEvent &) {
+    bool on = mi_show_unfinished_->IsChecked();
+    settings_.show_unfinished_voices = on;
+    bool kept = save_settings(settings_);
+    say(wxString(on ? "VocalWriter's unfinished voices, Miles, Ellen1, Kae1, Sonny1, Ed1 and Cellos, are offered "
+                      "with the others"
+                    : "VocalWriter's unfinished voices are hidden") +
+        (kept ? "" : ", for this sitting only: the settings file could not be written"));
+}
+
 //: A setting of the program too: whether VocalWriter's voices are sung
 //: through its own sequencer. Changed on the engines' thread, between two
 //: renders, so no song is sung half one way and half the other.
@@ -936,7 +967,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "On a track an instrument plays, a chord is its notes in a row, all but the last taking 0 "
         "beats; several pitches typed into a note, as C4 E4 G4, make one. Alt+Right and Alt+Left "
         "change how long a note held on its own sounds, and Ctrl+H plays the note the cursor is on",
-        "Space  play from the note the cursor is on, or stop if it is playing",
+        "Space  play from the note the cursor is on, or on a backing track from where it starts, or stop if it is playing",
         "Ctrl+P  play every track from the start",
         is_mac() ? "Option+H  hear the selected note" : "Ctrl+H  hear the selected note",
         "Ctrl+M  metronome on or off, for playing only; while the song plays it comes in or goes at once",
@@ -962,6 +993,8 @@ void Studio::on_keys(wxCommandEvent &) {
         "where it got to when it stops",
         "Ctrl+Shift+V  whether VocalWriter's voices are sung through its own sequencer, sample for sample as "
         "VocalWriter 2.0 sang them, or phrase by phrase as the other engines sing",
+        "Ctrl+Shift+U  whether VocalWriter's unfinished voices, Miles, Ellen1, Kae1, Sonny1, Ed1 and Cellos, are "
+        "offered with the others",
         "Ctrl+Shift+S  export the whole song as one WAV, FLAC or Ogg Vorbis file",
         "Ctrl+Shift+T  export every track to its own WAV, FLAC or Ogg Vorbis file",
         "Ctrl+Shift+M  export the song as a MIDI file, as VocalWriter did: the channels are asked first",
@@ -1085,7 +1118,7 @@ std::string Studio::track_state(const Track &t) const {
     if (t.mute) bits.push_back("muted");
     if (bits.empty())
         for (const Track &x : song_.tracks)
-            if (x.solo && !x.mute) {
+            if (x.solo && !x.mute && !is_tempo_track(x)) {
                 bits.push_back("silent");
                 break;
             }
@@ -1097,11 +1130,13 @@ std::string Studio::track_state(const Track &t) const {
 
 void Studio::refresh_track(int i) {
     const Track &t = song_.tracks[size_t(i)];
+    // a Tempo track has its changes and nothing else to show
+    bool tempo = is_tempo_track(t);
     tracks_list_->SetItem(i, 0, W(t.name));
     tracks_list_->SetItem(i, 1, W(track_sound(t)));
-    tracks_list_->SetItem(i, 2, W(std::to_string(t.volume) + "%"));
-    tracks_list_->SetItem(i, 3, W(pan_text(t.pan)));
-    tracks_list_->SetItem(i, 4, W(track_state(t)));
+    tracks_list_->SetItem(i, 2, tempo ? wxString() : W(std::to_string(t.volume) + "%"));
+    tracks_list_->SetItem(i, 3, tempo ? wxString() : W(pan_text(t.pan)));
+    tracks_list_->SetItem(i, 4, tempo ? wxString() : W(track_state(t)));
 }
 
 void Studio::sync_tracks(int select) {
@@ -1129,6 +1164,7 @@ void Studio::on_track_chosen() {
     relabel(list_, W("Notes in " + t.name));
     sync(t.cursor);
     if (t.is_backing()) say(W(t.name + ", " + track_sound(t) + ", " + track_state(t)));
+    else if (is_tempo_track(t)) say(W(t.name + ", " + track_sound(t) + ", " + plural(t.notes.size(), "note")));
     else say(W(t.name + ", " + track_sound(t) + ", " + plural(t.notes.size(), "note") + ", " + track_state(t)));
 }
 
@@ -1224,6 +1260,14 @@ void Studio::nudge_tracks(int volume, int pan) {
         for (int r : tracks_list_->SelectedRows())
             if (r >= 0 && r < int(song_.tracks.size())) rows.push_back(r);
         if (rows.empty()) rows = {track_at()};
+        // a Tempo track has no volume or pan, and is left out
+        rows.erase(std::remove_if(rows.begin(), rows.end(),
+                                  [&](int r) { return is_tempo_track(song_.tracks[size_t(r)]); }),
+                   rows.end());
+        if (rows.empty()) {
+            say(W(song_.tracks[size_t(track_at())].name + kTempoTrackSaid));
+            return;
+        }
         size_t moved = 0;
         for (int r : rows) {
             Track &t = song_.tracks[size_t(r)];
@@ -1234,7 +1278,8 @@ void Studio::nudge_tracks(int volume, int pan) {
             ++moved;
             refresh_track(r);
         }
-        const Track &t = song_.tracks[size_t(track_at())];
+        int at = std::find(rows.begin(), rows.end(), track_at()) != rows.end() ? track_at() : rows[0];
+        const Track &t = song_.tracks[size_t(at)];
         std::string now = volume ? "volume " + std::to_string(t.volume) + " per cent" : "pan " + pan_text(t.pan);
         if (!moved) {
             announce_note(W(now + ", as far as it goes"), tracks_list_, track_at());
@@ -1262,6 +1307,10 @@ void Studio::toggle_track(bool solo) {
     undoable("mute or solo track", [&] {
         int i = track_at();
         Track &t = song_.tracks[size_t(i)];
+        if (is_tempo_track(t)) {
+            say(W(t.name + kTempoTrackSaid));
+            return;
+        }
         bool &field = solo ? t.solo : t.mute;
         field = !field;
         touch();
@@ -1368,6 +1417,21 @@ bool Studio::takes_notes() {
 }
 
 void Studio::on_track_edit(wxCommandEvent &) {
+    if (is_tempo_track(song_.tracks[size_t(track_at())])) {
+        undoable("track settings", [&] {
+            int i = track_at();
+            Track &t = song_.tracks[size_t(i)];
+            TempoTrackDialog dlg(this, t);
+            if (dlg.ShowModal() != wxID_OK) return;
+            dlg.apply(t);
+            touch();
+            refresh_track(i);
+            if (i == current_) relabel(list_, W("Notes in " + t.name));
+            reannounce(tracks_list_, i);
+            say(W(t.name + ", " + track_sound(t)));
+        });
+        return;
+    }
     if (song_.tracks[size_t(track_at())].is_backing()) {
         undoable("track settings", [&] {
             int i = track_at();
@@ -2355,7 +2419,9 @@ void Studio::heard(const Mixed &res) {
 
 //: Where Space starts from: the note the cursor is on. Every track starts
 //: there -- the cursor is a place in the song, and the parts stay together.
+//: On a backing track, which has no notes, where its file begins.
 double Studio::start_beats() {
+    if (track().is_backing()) return std::max(0.0, track().audio_beat);
     int i = selection();
     return i > 0 ? position(i) : 0.0;
 }
@@ -2403,8 +2469,9 @@ void Studio::start_playing(double start, bool quiet) {
         total = std::max(total, s);
     }
     // past the end: start again (a backing track runs on past the voices,
-    // but where the cursor is is where the notes are)
-    if (start >= total - 1e-9) start = 0.0;
+    // but where the cursor is is where the notes are); on a backing track
+    // Space starts where its file does, past the notes or not
+    if (start >= total - 1e-9 && !track().is_backing()) start = 0.0;
     stop_audio();          // the file cannot be written while it plays
     play_from_ = start;
     rendering_ = true;
@@ -2952,6 +3019,69 @@ void Studio::open_project(const std::string &path) {
           " notes, " + fmt_g(bpm) + " bpm"));
     to_tracks();
 }
+
+//: A file opened from Explorer or the Finder while the program runs: the
+//: song open here is given up for it only if asked, its kept copy with it.
+//: Under a dialog it waits until the dialog closes (dialog_open).
+void Studio::open_from_outside(const std::string &path) {
+    if (dialog_open()) {
+        outside_waiting_ = path;
+        return;
+    }
+    if (IsIconized()) Iconize(false);
+    Raise();
+    bool open = dirty_ || !path_.empty() || !import_name_.empty();
+    for (const Track &t : song_.tracks) open = open || !t.notes.empty() || t.is_backing();
+    if (open) {
+        std::string name = song_name();
+        if (name.empty()) name = "Untitled";
+        exclaim();
+        int answer = wxMessageBox(
+            W(base_name(path) + " was opened while " + name + " is open here" +
+              (dirty_ ? ", with changes that have not been saved" : "") + ".\n\nDiscard " + name + " and open " +
+              base_name(path) + "?"),
+            kAppName, wxYES_NO | wxICON_QUESTION, this);
+        if (answer != wxYES) {
+            say(W(base_name(path) + " was not opened; " + name + " is still open"));
+            return;
+        }
+        // given up, as closing gives it up: its kept copy is not needed
+        recovery_timer_.Stop();
+        recovery_clear();
+    }
+    open_project(path);
+}
+
+//: Whether a dialog is open in front of the window, which a song coming in
+//: would pull the song out from under.
+bool Studio::dialog_open() const {
+#ifdef __WXMSW__
+    // a message box or a file dialog disables the window without wx knowing
+    if (!::IsWindowEnabled(GetHWND())) return true;
+#endif
+    if (!IsEnabled()) return true;
+    for (wxWindow *w : wxTopLevelWindows) {
+        const wxDialog *d = dynamic_cast<const wxDialog *>(w);
+        if (d && d->IsModal()) return true;
+    }
+    return false;
+}
+
+#ifdef __WXMSW__
+//: The file a second copy of the program was started for, handed over
+//: (main.cpp); asked about once this message has been answered.
+WXLRESULT Studio::MSWWindowProc(WXUINT msg, WXWPARAM wparam, WXLPARAM lparam) {
+    if (msg == WM_COPYDATA) {
+        const COPYDATASTRUCT *data = reinterpret_cast<const COPYDATASTRUCT *>(lparam);
+        if (data && data->dwData == kHandedFile && data->lpData) {
+            std::string path(static_cast<const char *>(data->lpData), data->cbData);
+            CallAfter([this, path] { open_from_outside(path); });
+            return TRUE;
+        }
+    }
+    return wxFrame::MSWWindowProc(msg, wparam, lparam);
+}
+#endif
 
 //: A song just come in starts in the tracks list, wherever the keyboard was;
 //: after the dialogs that brought it in have given the focus back.

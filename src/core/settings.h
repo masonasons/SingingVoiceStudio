@@ -51,6 +51,9 @@ struct Settings {
     bool octave_instruments = false;
     //: while the song plays, every track's cursor moves to the note sung
     bool follow_playback = false;
+    //: the voices VocalWriter never finished are offered to choose as well
+    //: (is_unfinished_vocalwriter_voice)
+    bool show_unfinished_voices = false;
     //: what Export audio or Export tracks wrote last: ".wav", ".flac" or ".ogg"
     std::string export_format = ".wav";
     //: the SoundFonts loaded in the Soundbank manager

@@ -64,7 +64,8 @@ bool attach_console() {
 }
 
 //: One copy at a time: a second would take the song the first keeps for
-//: recovery as left by a crash. It says so and gives way.
+//: recovery as left by a crash. It says so and gives way; on Windows a file
+//: it was started for is handed to the first, which asks what to do with it.
 const char *const kRunning = "Singing Voice Studio is already running.";
 std::string running_text(const std::string &file) {
     return file.empty() ? kRunning : std::string(kRunning) + "\n\n" + file +
@@ -84,20 +85,47 @@ BOOL CALLBACK find_studio(HWND hwnd, LPARAM found) {
     return TRUE;
 }
 
+//: The file, named in full, sent to the copy running, which takes it once
+//: this has returned (Studio::open_from_outside). False if it would not.
+bool hand_over(HWND other, const std::string &file) {
+    std::wstring wide = svs::widen(file);
+    wchar_t full[32768];
+    DWORD n = GetFullPathNameW(wide.c_str(), 32768, full, nullptr);
+    std::string path = n > 0 && n < 32768 ? svs::narrow(full) : file;
+    COPYDATASTRUCT data;
+    data.dwData = svs::kHandedFile;
+    data.cbData = DWORD(path.size());
+    data.lpData = const_cast<char *>(path.data());
+    DWORD_PTR answer = 0;
+    return SendMessageTimeoutW(other, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&data), SMTO_ABORTIFHUNG, 5000,
+                               &answer) &&
+           answer == TRUE;
+}
+
 //: Asked before wx starts, so a second copy shows nothing but the message:
 //: a mutex for this session, held until the copy that made it ends. Windows'
-//: own message box sounds the asterisk with it.
+//: own message box sounds the asterisk with it. A file goes to the copy
+//: running instead, which asks whether to give up its song for it.
 bool gave_way(const std::string &file) {
     HANDLE mutex = CreateMutexW(nullptr, FALSE, L"Local\\SingingVoiceStudio");
     if (!mutex || GetLastError() != ERROR_ALREADY_EXISTS) return false;
-    MessageBoxW(nullptr, svs::widen(running_text(file)).c_str(), L"Singing Voice Studio",
-                MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
     HWND other = nullptr;
     EnumWindows(find_studio, reinterpret_cast<LPARAM>(&other));
-    if (other) {
+    auto forward = [other] {
         if (IsIconic(other)) ShowWindow(other, SW_RESTORE);
+        // so the question it asks comes up in front
+        DWORD pid = 0;
+        GetWindowThreadProcessId(other, &pid);
+        AllowSetForegroundWindow(pid);
         SetForegroundWindow(other);
+    };
+    if (other && !file.empty()) {
+        forward();
+        if (hand_over(other, file)) return true;
     }
+    MessageBoxW(nullptr, svs::widen(running_text(file)).c_str(), L"Singing Voice Studio",
+                MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
+    if (other) forward();
     return true;
 }
 #endif
@@ -122,7 +150,7 @@ public:
     //: A song double-clicked in the Finder, or dropped on the Dock icon:
     //: macOS says so with an event rather than on the command line.
     void MacOpenFiles(const wxArrayString &files) override {
-        if (frame_ && !files.empty()) frame_->open_project(svs::U(files[0]));
+        if (frame_ && !files.empty()) frame_->open_from_outside(svs::U(files[0]));
     }
     void MacNewFile() override {}
 #endif
