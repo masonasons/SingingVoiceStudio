@@ -69,6 +69,8 @@ Settings load_settings() {
         s.octave_instruments = doc["octave_instruments"].get<bool>();
     if (doc.contains("follow_playback") && doc["follow_playback"].is_boolean())
         s.follow_playback = doc["follow_playback"].get<bool>();
+    if (doc.contains("show_unfinished_voices") && doc["show_unfinished_voices"].is_boolean())
+        s.show_unfinished_voices = doc["show_unfinished_voices"].get<bool>();
     if (doc.contains("export_format") && doc["export_format"].is_string())
         s.export_format = doc["export_format"].get<std::string>();
     if (doc.contains("soundfonts") && doc["soundfonts"].is_array())
@@ -101,6 +103,7 @@ bool save_settings(const Settings &s) {
     doc["plain_held_vowels"] = s.plain_held_vowels;
     doc["octave_instruments"] = s.octave_instruments;
     doc["follow_playback"] = s.follow_playback;
+    doc["show_unfinished_voices"] = s.show_unfinished_voices;
     doc["export_format"] = s.export_format;
     json fonts = json::array();
     for (const SoundFontFile &f : s.soundfonts) fonts.push_back({{"path", f.path}, {"slot", f.slot}});

@@ -44,6 +44,9 @@ std::optional<double> stepped_length(double beats, bool up);
 
 constexpr int kSemitone = 1;
 constexpr int kOctave = 12;
+//: what a second copy of the program marks the file it hands the copy
+//: running with (WM_COPYDATA), "SVSO"
+constexpr unsigned long kHandedFile = 0x5356534F;
 
 class Studio : public wxFrame {
 public:
@@ -72,6 +75,8 @@ public:
     std::string label_of(const Note &n) const;
     //: a vowel held over several notes sings its first sound until the last
     bool plain_held() const { return settings_.plain_held_vowels; }
+    //: VocalWriter's unfinished voices are offered in the voice boxes too
+    bool show_unfinished() const { return settings_.show_unfinished_voices; }
     //: render notes on the current track's voice and play them
     void preview(const std::vector<Note> &notes, std::function<void()> done);
     //: Render the current track alone, `put` on its rows `spots`, from row
@@ -219,6 +224,7 @@ private:
     void on_own_path(wxCommandEvent &);
     void on_plain_held(wxCommandEvent &);
     void on_octave_instruments(wxCommandEvent &);
+    void on_show_unfinished(wxCommandEvent &);
     void on_follow(wxCommandEvent &);
     void follow();
     void preview_note(int i);
@@ -264,7 +270,13 @@ private:
     void on_open(wxCommandEvent &);
 public:
     void open_project(const std::string &path);
+    //: a file opened from Explorer or the Finder while the program runs
+    void open_from_outside(const std::string &path);
+#ifdef __WXMSW__
+    WXLRESULT MSWWindowProc(WXUINT msg, WXWPARAM wparam, WXLPARAM lparam) override;
+#endif
 private:
+    bool dialog_open() const;
     void on_save(wxCommandEvent &);
     void on_save_as(wxCommandEvent &);
     void write_project(const std::string &path);
@@ -294,6 +306,8 @@ private:
     bool rendering_ = false;
     bool discard_render_ = false;   // a new song came in while it rendered
     std::string path_;
+    //: a file opened from outside while a dialog was open, waiting for it to close
+    std::string outside_waiting_;
     bool dirty_ = false;
     Settings settings_;
     wxTimer preview_timer_, recovery_timer_, follow_timer_, export_timer_;
@@ -337,6 +351,7 @@ private:
     wxMenuItem *mi_plain_held_ = nullptr;
     wxMenuItem *mi_octave_instruments_ = nullptr;
     wxMenuItem *mi_follow_ = nullptr;
+    wxMenuItem *mi_show_unfinished_ = nullptr;
     wxMenuItem *mi_undo_ = nullptr;
     wxMenuItem *mi_redo_ = nullptr;
     bool relabel_pending_ = false;

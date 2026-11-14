@@ -1,10 +1,11 @@
 // project.h -- the song: notes, tracks, saving, reopening and MIDI import.
 //
-// A project is plain JSON, the same `.vws` file VocalWriter Studio writes, so
-// a song moves between the two programs. It holds what the editor knows and
-// nothing else -- the notes, the tempo and the voices -- so it stays readable,
-// stays small, and does not go stale when an engine changes. The audio is not
-// in it; that is what Export WAV is for.
+// A project is plain JSON, the `.vws` file VocalWriter Studio writes, and one
+// of its opens here; since version 3 VocalWriter's voices are numbered by
+// program, not by their place in the bank (kVocalWriterPlaces). It holds what
+// the editor knows and nothing else -- the notes, the tempo and the voices --
+// so it stays readable, stays small, and does not go stale when an engine
+// changes. The audio is not in it; that is what Export WAV is for.
 #pragma once
 
 #include <functional>
@@ -258,6 +259,10 @@ Track tempo_track(const std::vector<TempoChange> &changes, const std::vector<Sig
 //: what the Tempo track holds, as said: "2 tempo changes and 1 time
 //: signature change"; empty for none
 std::string tempo_map_said(size_t tempos, size_t sigs);
+//: whether a track holds tempo or time signature changes and nothing else
+//: but rests, as the Tempo track an import makes: it sings nothing, so it
+//: has no voice, volume, pan, mute or solo to speak of
+bool is_tempo_track(const Track &track);
 //: whether a track has a note anybody sings
 bool sings(const Track &track);
 //: the track's changes of voice, as (beat, voice), in order

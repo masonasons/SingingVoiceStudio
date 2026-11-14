@@ -5,7 +5,7 @@
 // installed: a song written with DECtalk's Betty still says Betty on a machine
 // without DECtalk, and says why it cannot sing.
 //
-//        0 -    999   VocalWriter's voice bank, in the bank's own order
+//        0 -    999   VocalWriter's voice bank, by program number
 //     1000 -   1999   DECtalk
 //     2000 -   2999   the SSI-263
 //     3000 -   3999   Microsoft Sam, Mike and Mary, and the SAPI 4 voice modes
@@ -59,6 +59,33 @@ constexpr int kGmDrums = kGmBase + 128;
 //: Whether a voice is one of VocalWriter's: the only engine a velocity means
 //: more than loudness to, which every engine has as the part's volume.
 inline bool is_vocalwriter_voice(int id) { return id >= kVocalWriterBase && id < kVocalWriterBase + kFamilySpan; }
+//: VocalWriter's voices are numbered by the first program change that picks
+//: each, as General MIDI groups them, and those none picks last; projects
+//: before version 3, and VocalWriter Studio's, number them by their place in
+//: the bank. Each number's place in GMSpeech's bank:
+constexpr int kVocalWriterPlaces[] = {
+    0, 1, 2, 3, 4, 83, 86, 10, 65, 11, 13, 27, 49, 50, 63, 75, 73, 24, 70, 29, 30, 17, 44, 71, 62,
+    19, 77, 28, 35, 56, 80, 55, 79, 15, 81, 22, 66, 20, 59, 38, 48, 82, 21, 43, 37, 60, 61, 67, 84,
+    85, 25, 39, 41, 42, 14, 16, 31, 26, 32, 46, 51, 40, 69, 72, 76, 78, 34, 47, 18, 57, 68, 74, 23,
+    33, 36, 45, 52, 53, 54, 58, 64, 5, 6, 7, 8, 9, 12
+};
+constexpr int kVocalWriterVoices = int(sizeof kVocalWriterPlaces / sizeof kVocalWriterPlaces[0]);
+//: A VocalWriter voice's place in the bank; a number past the table is its own.
+inline int vocalwriter_place(int id) {
+    int n = id - kVocalWriterBase;
+    return n >= 0 && n < kVocalWriterVoices ? kVocalWriterPlaces[n] : n;
+}
+//: The VocalWriter voice at a place in the bank: vocalwriter_place turned round.
+inline int vocalwriter_voice_at(int place) {
+    for (int n = 0; n < kVocalWriterVoices; ++n)
+        if (kVocalWriterPlaces[n] == place) return kVocalWriterBase + n;
+    return kVocalWriterBase + place;
+}
+//: Whether a voice is one VocalWriter never finished: Miles, Ellen1, Kae1,
+//: Sonny1, Ed1 and Cellos, the last six, which no program change reaches.
+inline bool is_unfinished_vocalwriter_voice(int id) {
+    return id >= kVocalWriterBase + kVocalWriterVoices - 6 && id < kVocalWriterBase + kVocalWriterVoices;
+}
 //: Whether a voice is one of the GM Soundbank's instruments, which play the
 //: notes, chords and all, rather than sing them.
 inline bool is_gm_voice(int id) { return id >= kGmBase && id < kGmBase + kFamilySpan; }

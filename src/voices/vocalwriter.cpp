@@ -363,8 +363,9 @@ bool to_seq(const Part &part, int voice_id, SeqPart *sp) {
     if (part.notes.empty()) return false;
     const bool played = is_gm_voice(voice_id);
     const int kind = !played ? VWSEQ_VOCAL : voice_id == kGmDrums ? VWSEQ_DRUMS : VWSEQ_INSTRUMENT;
-    const int base = played ? kGmBase : kVocalWriterBase;
-    const int voice = voice_id - base;
+    // the engine's own index: the instrument, or the voice's place in the bank
+    auto index = [played](int v) { return played ? v - kGmBase : vocalwriter_place(v); };
+    const int voice = index(voice_id);
     // The sequencer's tempo is a whole number from 10 to 250. Any other is
     // played at the nearest it has, with a beat's ticks counted to match:
     // 240 at a tempo it has, as VocalWriter counts them. The changes go in
@@ -585,7 +586,7 @@ bool to_seq(const Part &part, int voice_id, SeqPart *sp) {
     // there, which VocalWriter sings the same as after it
     int32_t first_voice_tick = -1;
     for (const auto &v : part.voices) {
-        ev.push_back({ticks(v.first), VWSEQ_SET_VOICE, 0, v.second - base, 0});
+        ev.push_back({ticks(v.first), VWSEQ_SET_VOICE, 0, index(v.second), 0});
         if (first_voice_tick < 0) first_voice_tick = ev.back().time;
     }
     std::stable_sort(ev.begin(), ev.end(),
@@ -659,8 +660,7 @@ public:
         due_ = 0.0;
         given_ = 0;
         std::vector<unsigned char> blob = sequence(phrase.notes);
-        int index = voice_id_ - kVocalWriterBase;
-        if (vw_ed_voice(e, index) != 0) return out;
+        if (vw_ed_voice(e, vocalwriter_place(voice_id_)) != 0) return out;
         vw_ed_sequence(e, blob.data(), blob.size());
         vw_ed_start(e);
         voice_controls(e, phrase);
@@ -859,7 +859,7 @@ private:
         vw_ed_defaults(e, 1);
         // The defaults clear the voice's own chorus (Webster's, the only one
         // in the bank), so the voice is chosen again, as VocalWriter does.
-        vw_ed_voice(e, voice_id_ - kVocalWriterBase);
+        vw_ed_voice(e, vocalwriter_place(voice_id_));
         vw_ed_volume(e, 127);
         if (phrase.level != 1.0) vw_ed_level(e, float(phrase.level));
         size_t count;
@@ -909,8 +909,11 @@ public:
         std::lock_guard<std::mutex> lock(mu_);
         load_names();
         std::vector<VoiceEntry> out;
-        for (size_t i = 0; i < names_.size(); ++i)
-            if (!names_[i].empty()) out.push_back({kVocalWriterBase + int(i), names_[i]});
+        for (size_t i = 0; i < names_.size(); ++i) {
+            int place = vocalwriter_place(kVocalWriterBase + int(i));
+            if (place < int(names_.size()) && !names_[size_t(place)].empty())
+                out.push_back({kVocalWriterBase + int(i), names_[size_t(place)]});
+        }
         return out;
     }
 
@@ -927,7 +930,7 @@ public:
 
     std::unique_ptr<Singer> singer(int voice_id, std::string *err) override {
         if (!available(err)) return nullptr;
-        int index = voice_id - kVocalWriterBase;
+        int index = vocalwriter_place(voice_id);
         std::unique_ptr<vw_editor, void (*)(vw_editor *)> e(VwAssets::get().open_editor(), vw_ed_close);
         if (!e) {
             if (err) *err = "VocalWriter's engine would not start";
@@ -1006,7 +1009,7 @@ private:
 
     std::mutex mu_;
     bool loaded_ = false;
-    std::vector<std::string> names_;
+    std::vector<std::string> names_;   // by place in the bank
     std::map<int, double> headroom_;
 };
 
@@ -1115,7 +1118,10 @@ std::vector<int> vocalwriter_program_voices() {
     std::vector<int> out(128, -1);
     std::unique_ptr<vw_editor, void (*)(vw_editor *)> e(VwAssets::get().open_editor(), vw_ed_close);
     if (!e) return out;
-    for (int p = 0; p < 128; ++p) out[size_t(p)] = vw_ed_program_voice(e.get(), p);
+    for (int p = 0; p < 128; ++p) {
+        int place = vw_ed_program_voice(e.get(), p);
+        out[size_t(p)] = place < 0 ? -1 : vocalwriter_voice_at(place);
+    }
     return out;
 }
 

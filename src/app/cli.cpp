@@ -415,9 +415,13 @@ int run_cli(const CliArgs &args) {
         for (size_t i = 0; i < song.tracks.size(); ++i) {
             const Track &t = song.tracks[i];
             char buf[512];
-            std::snprintf(buf, sizeof buf, "%2zu  %-24s %-20s %3d%%  %s%s", i + 1, t.name.c_str(),
-                          Registry::get().voice_name(track_voice(t, programs)).c_str(), t.volume,
-                          pan_text(t.pan).c_str(), t.mute ? "  muted" : "");
+            // a Tempo track has no voice, volume or pan to list
+            if (is_tempo_track(t))
+                std::snprintf(buf, sizeof buf, "%2zu  %-24s tempo track", i + 1, t.name.c_str());
+            else
+                std::snprintf(buf, sizeof buf, "%2zu  %-24s %-20s %3d%%  %s%s", i + 1, t.name.c_str(),
+                              Registry::get().voice_name(track_voice(t, programs)).c_str(), t.volume,
+                              pan_text(t.pan).c_str(), t.mute ? "  muted" : "");
             out(buf);
         }
         size_t n = 0;
