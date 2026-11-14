@@ -8,7 +8,7 @@ by SoundFonts:
 
 | engine | voices | numbers | what it is |
 |---|---|---|---|
-| **VocalWriter 2.0** (KAE Labs, 2005) | 87, the bank's own | 0 - 86 | the original's PowerPC code lifted into C (`engine/`, VocalWriterC) |
+| **VocalWriter 2.0** (KAE Labs, 2005) | 87, the bank's own, by program number | 0 - 86 | the original's PowerPC code lifted into C (`engine/`, VocalWriterC) |
 | **DECtalk** | Paul, Betty, Harry, Frank, Dennis, Kit, Ursula, Rita, Wendy | 1000 - 1008 | github.com/dectalk/dectalk, sung through its phoneme `<duration,pitch>` notation |
 | **SSI-263** | Standard, Deep, Bright, Child | 2000 - 2003 | the chip itself, driven at register level (github.com/tgeczy/ssi263-speech) |
 | **Microsoft** | Sam, Mike, Mary, each plain, in Hall, in Stadium, in Space, Whisper, RoboSoft One to Six | 3000 - 3050 | the SAPI 5 engine rebuilt in C, with the SAPI 4 voice modes (github.com/KamiKitsune420/ms-sam-mike-mary-decomp) |
@@ -42,7 +42,8 @@ sample, what VocalWriter 2.0 sang, and a song VocalWriter's voices sing every
 part of is exported as VocalWriter played it: all the parts at once, through
 its reverb. Playing, a phrase is then sung on its own, which comes very near.
 The command line sings them the way the window was last set to. A project
-saved here is the same file byte for byte as VocalWriter Studio's. The other engines are handed the same notes, the same phoneme timings
+of VocalWriter Studio's opens here as it was; one saved here numbers
+VocalWriter's voices by program (below), which VocalWriter Studio does not. The other engines are handed the same notes, the same phoneme timings
 and one shared pitch curve (written note, bend, detune, portamento, vibrato),
 each in its own terms: DECtalk a pitch per phoneme in Hz, the SSI-263 its
 inflection register every 32 samples, Microsoft's vocoder twenty pitch knots
@@ -78,7 +79,8 @@ same moment, and Space on the backing track itself plays from where it starts;
 Export audio includes it, Export tracks leaves it out (it is a file
 already). The project saves where the file is; a project sent along with its
 file in the same folder finds it there. VocalWriter Studio reads such a
-project too, the backing track as a part with no notes.
+project too, the backing track as a part with no notes, though not
+VocalWriter's voices as numbered here.
 A song with no name yet is named after the backing track added to it, as an
 imported song is after its file. A sound file opened from Explorer or on the
 command line starts a new song named after it, the file on a backing track
@@ -325,6 +327,17 @@ on a SoundFont, has them as written; the drum kit is left as it is. It is for
 every track the GM Soundbank plays, a VocalWriter song's as well, which
 VocalWriter played without it. The command line does as the window was last
 set to.
+
+**VocalWriter's voices** are numbered by the program change that picks each,
+as General MIDI groups them: the singers first, then the breaths and
+Webster, then the instruments family by family. Six that VocalWriter never
+finished, Miles, Ellen1, Kae1, Sonny1, Ed1 and Cellos, are in its bank with
+no program change to pick them; they come last, 81 to 86, and Track
+settings and Add controller leave them out unless Settings > Show
+unfinished VocalWriter voices (Ctrl+Shift+U) is turned on. A track or
+controller that sings with one already keeps it, and shows it still. A
+project saved before, or by VocalWriter Studio, numbered them by their
+place in the bank; it is renumbered as it opens, and saved as version 3.
 
 **Velocities** come in on every note of a MIDI file, sung or played, as
 VocalWriter took them in: the one most of a track's notes have is the
@@ -608,6 +621,7 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Ctrl+Shift+D | whether importing MIDI and adding a word sing a vowel held over several notes on its first sound |
 | Ctrl+Shift+O | whether the GM Soundbank makes good the octave a few of its instruments are off by |
 | Ctrl+Shift+V | whether VocalWriter's voices are sung through its own sequencer |
+| Ctrl+Shift+U | whether VocalWriter's unfinished voices are offered with the others |
 | Ctrl+Shift+K | the Soundbank manager: SoundFonts and the default soundbank |
 | Ctrl+Shift+S / Ctrl+Shift+T | export one WAV, FLAC or Ogg Vorbis file / one per track |
 | Ctrl+Shift+M | export a MIDI file |

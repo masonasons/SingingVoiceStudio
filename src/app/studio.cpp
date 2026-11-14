@@ -50,6 +50,7 @@ enum {
     ID_EXPORT_MIDI, ID_ADD_WORD_EXISTING, ID_OCTAVE_INSTRUMENTS, ID_ADD_TEXT, ID_REMOVE_VOLUMES,
     ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN, ID_SOUNDBANKS,
     ID_NOTE_TO_REST, ID_TRACK_LOUDER, ID_TRACK_QUIETER, ID_TRACK_PAN_LEFT, ID_TRACK_PAN_RIGHT,
+    ID_SHOW_UNFINISHED,
 };
 
 //: A beat is a quarter note, so a sixteenth is a quarter of a beat: the step
@@ -527,6 +528,11 @@ void Studio::build_menu() {
                                           "Sample for sample as VocalWriter 2.0 sang them; otherwise phrase by phrase, "
                                           "as the other engines sing");
     mi_own_path_->Check(settings_.vocalwriter_own_path);
+    mi_show_unfinished_ = prefs->AppendCheckItem(
+        ID_SHOW_UNFINISHED, K("Show &unfinished VocalWriter voices\tCtrl+Shift+U"),
+        "Offer Miles, Ellen1, Kae1, Sonny1, Ed1 and Cellos, which VocalWriter never finished, in the track "
+        "settings and controllers too");
+    mi_show_unfinished_->Check(settings_.show_unfinished_voices);
     prefs->Append(ID_PANTHERA, K("Panthera &folder..."), "Where to find Panthera, for the MacinTalk voices");
     prefs->Append(ID_SOUNDBANKS, K("Sound&bank manager...\tCtrl+Shift+K"),
                   "Load SoundFonts to play with, and choose what plays the parts of an imported song that are not sung");
@@ -602,6 +608,7 @@ void Studio::build_menu() {
     on(ID_PLAIN_HELD, &Studio::on_plain_held);
     on(ID_OCTAVE_INSTRUMENTS, &Studio::on_octave_instruments);
     on(ID_FOLLOW, &Studio::on_follow);
+    on(ID_SHOW_UNFINISHED, &Studio::on_show_unfinished);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { Close(); }, wxID_EXIT);
 }
 
@@ -790,6 +797,19 @@ void Studio::on_octave_instruments(wxCommandEvent &) {
         (kept ? "" : ", for this sitting only: the settings file could not be written"));
 }
 
+//: A setting of the program too: whether the voices VocalWriter never
+//: finished are offered in the track settings and controllers. A track or
+//: controller singing with one already keeps it, and still shows it.
+void Studio::on_show_unfinished(wxCommandEvent &) {
+    bool on = mi_show_unfinished_->IsChecked();
+    settings_.show_unfinished_voices = on;
+    bool kept = save_settings(settings_);
+    say(wxString(on ? "VocalWriter's unfinished voices, Miles, Ellen1, Kae1, Sonny1, Ed1 and Cellos, are offered "
+                      "with the others"
+                    : "VocalWriter's unfinished voices are hidden") +
+        (kept ? "" : ", for this sitting only: the settings file could not be written"));
+}
+
 //: A setting of the program too: whether VocalWriter's voices are sung
 //: through its own sequencer. Changed on the engines' thread, between two
 //: renders, so no song is sung half one way and half the other.
@@ -973,6 +993,8 @@ void Studio::on_keys(wxCommandEvent &) {
         "where it got to when it stops",
         "Ctrl+Shift+V  whether VocalWriter's voices are sung through its own sequencer, sample for sample as "
         "VocalWriter 2.0 sang them, or phrase by phrase as the other engines sing",
+        "Ctrl+Shift+U  whether VocalWriter's unfinished voices, Miles, Ellen1, Kae1, Sonny1, Ed1 and Cellos, are "
+        "offered with the others",
         "Ctrl+Shift+S  export the whole song as one WAV, FLAC or Ogg Vorbis file",
         "Ctrl+Shift+T  export every track to its own WAV, FLAC or Ogg Vorbis file",
         "Ctrl+Shift+M  export the song as a MIDI file, as VocalWriter did: the channels are asked first",

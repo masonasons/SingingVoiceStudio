@@ -1,10 +1,11 @@
 // project.h -- the song: notes, tracks, saving, reopening and MIDI import.
 //
-// A project is plain JSON, the same `.vws` file VocalWriter Studio writes, so
-// a song moves between the two programs. It holds what the editor knows and
-// nothing else -- the notes, the tempo and the voices -- so it stays readable,
-// stays small, and does not go stale when an engine changes. The audio is not
-// in it; that is what Export WAV is for.
+// A project is plain JSON, the `.vws` file VocalWriter Studio writes, and one
+// of its opens here; since version 3 VocalWriter's voices are numbered by
+// program, not by their place in the bank (kVocalWriterPlaces). It holds what
+// the editor knows and nothing else -- the notes, the tempo and the voices --
+// so it stays readable, stays small, and does not go stale when an engine
+// changes. The audio is not in it; that is what Export WAV is for.
 #pragma once
 
 #include <functional>

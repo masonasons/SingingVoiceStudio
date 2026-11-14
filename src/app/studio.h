@@ -75,6 +75,8 @@ public:
     std::string label_of(const Note &n) const;
     //: a vowel held over several notes sings its first sound until the last
     bool plain_held() const { return settings_.plain_held_vowels; }
+    //: VocalWriter's unfinished voices are offered in the voice boxes too
+    bool show_unfinished() const { return settings_.show_unfinished_voices; }
     //: render notes on the current track's voice and play them
     void preview(const std::vector<Note> &notes, std::function<void()> done);
     //: Render the current track alone, `put` on its rows `spots`, from row
@@ -222,6 +224,7 @@ private:
     void on_own_path(wxCommandEvent &);
     void on_plain_held(wxCommandEvent &);
     void on_octave_instruments(wxCommandEvent &);
+    void on_show_unfinished(wxCommandEvent &);
     void on_follow(wxCommandEvent &);
     void follow();
     void preview_note(int i);
@@ -348,6 +351,7 @@ private:
     wxMenuItem *mi_plain_held_ = nullptr;
     wxMenuItem *mi_octave_instruments_ = nullptr;
     wxMenuItem *mi_follow_ = nullptr;
+    wxMenuItem *mi_show_unfinished_ = nullptr;
     wxMenuItem *mi_undo_ = nullptr;
     wxMenuItem *mi_redo_ = nullptr;
     bool relabel_pending_ = false;

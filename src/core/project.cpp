@@ -62,7 +62,8 @@ const NoteControl *note_control(const std::string &key) {
 namespace {
 //: Bumped only if an older file would otherwise be read wrongly. Version 2
 //: keeps the notes under `tracks`; a version 1 file is read as one track.
-const int kVersion = 2;
+//: Version 3 numbers VocalWriter's voices by program (kVocalWriterPlaces).
+const int kVersion = 3;
 const char *const kFormat = "vocalwriter-studio";
 const char *const kClipKey = "vocalwriter-studio-notes";
 //: VocalWriter's own defaults for a reverb that is asked for but not given
@@ -746,6 +747,18 @@ Song load_project(const std::string &path) {
         Track t;
         t.name = "Voice 1";
         song.tracks.push_back(t);
+    }
+    // an older file, or VocalWriter Studio's, has VocalWriter's voices by
+    // their place in the bank
+    if (!doc.contains("version") || as_int(doc["version"], 1) < 3) {
+        auto renumber = [](std::optional<int> &id) {
+            if (id && is_vocalwriter_voice(*id)) id = vocalwriter_voice_at(*id - kVocalWriterBase);
+        };
+        for (Track &t : song.tracks) {
+            renumber(t.voice_id);
+            for (Note &n : t.notes)
+                if (n.controller) renumber(n.voice_id);
+        }
     }
     // A backing track's file that is not where it was, but is beside the
     // project: the two were moved, or sent to someone, together.

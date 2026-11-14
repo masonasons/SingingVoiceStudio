@@ -22,7 +22,7 @@ class Registry {
 public:
     static Registry &get();
 
-    //: Every voice, VocalWriter's first in the bank's own order, then
+    //: Every voice, VocalWriter's first by program number, then
     //: DECtalk's, the SSI-263's and Microsoft's, and the SoundFonts' last.
     //: Fixed numbers; see family.h.
     std::vector<VoiceListing> voices();
