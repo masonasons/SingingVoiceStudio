@@ -278,7 +278,8 @@ std::string pitch_name(int midi) {
 std::vector<const Track *> audible(const std::vector<Track> &tracks) {
     std::vector<const Track *> solo, on;
     for (const Track &t : tracks) {
-        if (t.solo && !t.mute) solo.push_back(&t);
+        // a Tempo track's solo, set before it had none, silences nothing
+        if (t.solo && !t.mute && !is_tempo_track(t)) solo.push_back(&t);
         if (!t.mute) on.push_back(&t);
     }
     return solo.empty() ? on : solo;
@@ -2247,6 +2248,21 @@ Track tempo_track(const std::vector<TempoChange> &changes, const std::vector<Sig
         at = std::max(at, c.first);
     }
     return t;
+}
+
+bool is_tempo_track(const Track &track) {
+    if (track.is_backing()) return false;
+    bool any = false;
+    for (const Note &n : track.notes) {
+        if (!n.controller) {
+            if (!n.is_rest()) return false;
+            continue;
+        }
+        // a controller that changes anything else belongs to a part
+        if (n.voice_id || n.voice_name || n.pan || !n.controls.empty()) return false;
+        any = any || n.tempo > 0 || n.sig;
+    }
+    return any;
 }
 
 std::string tempo_map_said(size_t tempos, size_t sigs) {

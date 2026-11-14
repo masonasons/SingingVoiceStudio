@@ -2017,6 +2017,31 @@ void TrackDialog::apply(Track &track) const {
     else track.reverb.reset();
 }
 
+// -- TempoTrackDialog ----------------------------------------------------------------------
+
+TempoTrackDialog::TempoTrackDialog(wxWindow *parent, const Track &track) : wxDialog(parent, wxID_ANY, "Tempo track") {
+    wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+    wxStaticText *about = new wxStaticText(
+        this, wxID_ANY,
+        "This track holds only the song's tempo and time signature changes. It sings nothing, so it has no voice, "
+        "volume or pan; a note added to it makes it a part like any other.");
+    about->Wrap(380);
+    outer->Add(about, 0, wxALL, 8);
+    name_ = new wxTextCtrl(this, wxID_ANY, W(track.name), wxDefaultPosition, wxSize(220, -1));
+    labelled(this, outer, "Name", name_);
+    outer->Add(buttons(this), 0, wxEXPAND | wxALL, 8);
+    SetSizerAndFit(outer);
+    name_->SetFocus();
+    // selected, so what is typed replaces the name, as in a field tabbed to
+    name_->SelectAll();
+}
+
+void TempoTrackDialog::apply(Track &track) const {
+    wxString name = name_->GetValue();
+    name.Trim(true).Trim(false);
+    track.name = name.empty() ? "Tempo" : U(name);
+}
+
 // -- BackingDialog ------------------------------------------------------------------------
 
 BackingDialog::BackingDialog(wxWindow *parent, const Track &track)

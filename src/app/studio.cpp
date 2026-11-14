@@ -62,6 +62,9 @@ const double kMinBeats = 0.125;
 //: cent, and its pan by
 const int kVolumeStep = 1;
 const int kPanStep = 1;
+//: said after a Tempo track's name when asked for what it does not have
+const char *const kTempoTrackSaid = " holds only tempo and time signature changes, so it has no volume, pan, "
+                                    "mute or solo";
 //: how long the song has to stop changing before a copy is kept
 const int kRecoveryWait = 2500;
 //: how long the nudging has to stop before a note is previewed
@@ -1085,7 +1088,7 @@ std::string Studio::track_state(const Track &t) const {
     if (t.mute) bits.push_back("muted");
     if (bits.empty())
         for (const Track &x : song_.tracks)
-            if (x.solo && !x.mute) {
+            if (x.solo && !x.mute && !is_tempo_track(x)) {
                 bits.push_back("silent");
                 break;
             }
@@ -1097,11 +1100,13 @@ std::string Studio::track_state(const Track &t) const {
 
 void Studio::refresh_track(int i) {
     const Track &t = song_.tracks[size_t(i)];
+    // a Tempo track has its changes and nothing else to show
+    bool tempo = is_tempo_track(t);
     tracks_list_->SetItem(i, 0, W(t.name));
     tracks_list_->SetItem(i, 1, W(track_sound(t)));
-    tracks_list_->SetItem(i, 2, W(std::to_string(t.volume) + "%"));
-    tracks_list_->SetItem(i, 3, W(pan_text(t.pan)));
-    tracks_list_->SetItem(i, 4, W(track_state(t)));
+    tracks_list_->SetItem(i, 2, tempo ? wxString() : W(std::to_string(t.volume) + "%"));
+    tracks_list_->SetItem(i, 3, tempo ? wxString() : W(pan_text(t.pan)));
+    tracks_list_->SetItem(i, 4, tempo ? wxString() : W(track_state(t)));
 }
 
 void Studio::sync_tracks(int select) {
@@ -1129,6 +1134,7 @@ void Studio::on_track_chosen() {
     relabel(list_, W("Notes in " + t.name));
     sync(t.cursor);
     if (t.is_backing()) say(W(t.name + ", " + track_sound(t) + ", " + track_state(t)));
+    else if (is_tempo_track(t)) say(W(t.name + ", " + track_sound(t) + ", " + plural(t.notes.size(), "note")));
     else say(W(t.name + ", " + track_sound(t) + ", " + plural(t.notes.size(), "note") + ", " + track_state(t)));
 }
 
@@ -1224,6 +1230,14 @@ void Studio::nudge_tracks(int volume, int pan) {
         for (int r : tracks_list_->SelectedRows())
             if (r >= 0 && r < int(song_.tracks.size())) rows.push_back(r);
         if (rows.empty()) rows = {track_at()};
+        // a Tempo track has no volume or pan, and is left out
+        rows.erase(std::remove_if(rows.begin(), rows.end(),
+                                  [&](int r) { return is_tempo_track(song_.tracks[size_t(r)]); }),
+                   rows.end());
+        if (rows.empty()) {
+            say(W(song_.tracks[size_t(track_at())].name + kTempoTrackSaid));
+            return;
+        }
         size_t moved = 0;
         for (int r : rows) {
             Track &t = song_.tracks[size_t(r)];
@@ -1234,7 +1248,8 @@ void Studio::nudge_tracks(int volume, int pan) {
             ++moved;
             refresh_track(r);
         }
-        const Track &t = song_.tracks[size_t(track_at())];
+        int at = std::find(rows.begin(), rows.end(), track_at()) != rows.end() ? track_at() : rows[0];
+        const Track &t = song_.tracks[size_t(at)];
         std::string now = volume ? "volume " + std::to_string(t.volume) + " per cent" : "pan " + pan_text(t.pan);
         if (!moved) {
             announce_note(W(now + ", as far as it goes"), tracks_list_, track_at());
@@ -1262,6 +1277,10 @@ void Studio::toggle_track(bool solo) {
     undoable("mute or solo track", [&] {
         int i = track_at();
         Track &t = song_.tracks[size_t(i)];
+        if (is_tempo_track(t)) {
+            say(W(t.name + kTempoTrackSaid));
+            return;
+        }
         bool &field = solo ? t.solo : t.mute;
         field = !field;
         touch();
@@ -1368,6 +1387,21 @@ bool Studio::takes_notes() {
 }
 
 void Studio::on_track_edit(wxCommandEvent &) {
+    if (is_tempo_track(song_.tracks[size_t(track_at())])) {
+        undoable("track settings", [&] {
+            int i = track_at();
+            Track &t = song_.tracks[size_t(i)];
+            TempoTrackDialog dlg(this, t);
+            if (dlg.ShowModal() != wxID_OK) return;
+            dlg.apply(t);
+            touch();
+            refresh_track(i);
+            if (i == current_) relabel(list_, W("Notes in " + t.name));
+            reannounce(tracks_list_, i);
+            say(W(t.name + ", " + track_sound(t)));
+        });
+        return;
+    }
     if (song_.tracks[size_t(track_at())].is_backing()) {
         undoable("track settings", [&] {
             int i = track_at();

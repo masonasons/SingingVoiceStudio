@@ -101,7 +101,10 @@ whatever sings it. Every engine sings to the tempo, 5 to 500 beats a minute
 changes as their own song's. A MIDI file's tempo and time signature changes
 come in on a Tempo track at the top, rests and controllers alone, so each
 one falls exactly where the file has it; a file with neither has no Tempo
-track. The project keeps a track's controllers beside its
+track. A track holding nothing but tempo and time signature changes sings
+nothing, so the tracks list shows no volume, pan or state for it, Enter on
+it sets only its name, and mute, solo, volume and pan leave it out; a note
+added to it makes it a part like any other. The project keeps a track's controllers beside its
 notes, so a song without any is the same file as before.
 
 **VocalWriter's controls** are kept on the notes as its songs keep them: a

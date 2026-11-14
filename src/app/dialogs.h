@@ -398,6 +398,16 @@ private:
     std::vector<std::pair<const VoiceControl *, wxSpinCtrl *>> voice_ctrls_;
 };
 
+//: A Tempo track's name: it sings nothing, so it has no voice, volume or pan.
+class TempoTrackDialog : public wxDialog {
+public:
+    TempoTrackDialog(wxWindow *parent, const Track &track);
+    void apply(Track &track) const;
+
+private:
+    wxTextCtrl *name_;
+};
+
 //: A backing track's name, its file, where in the song the file starts, in
 //: beats, and its volume and pan.
 class BackingDialog : public wxDialog {

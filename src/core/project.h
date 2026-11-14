@@ -258,6 +258,10 @@ Track tempo_track(const std::vector<TempoChange> &changes, const std::vector<Sig
 //: what the Tempo track holds, as said: "2 tempo changes and 1 time
 //: signature change"; empty for none
 std::string tempo_map_said(size_t tempos, size_t sigs);
+//: whether a track holds tempo or time signature changes and nothing else
+//: but rests, as the Tempo track an import makes: it sings nothing, so it
+//: has no voice, volume, pan, mute or solo to speak of
+bool is_tempo_track(const Track &track);
 //: whether a track has a note anybody sings
 bool sings(const Track &track);
 //: the track's changes of voice, as (beat, voice), in order
