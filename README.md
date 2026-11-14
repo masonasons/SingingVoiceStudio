@@ -223,7 +223,10 @@ the likeliest taken, and a file without words played throughout;
 file, CC 7 by CC 11 with both at 127 being 100%, at its loudest, with
 VocalWriter's volume control against that where it changes, and its pan,
 CC 10, from the one at its first note, each change after that a controller
-before the note it comes at, sung or played. A sung part's program changes
+before the note it comes at, sung or played. Its pitch bend is read in
+semitones from the bend range RPN 0 sets, two until the file first sets it,
+as a synthesiser takes it, and a change of range moves a bend already held,
+so the GM Soundbank and a SoundFont bend alike. A sung part's program changes
 after its first note are controllers too, changes of voice to the one
 VocalWriter's own program number picks. A MIDI file
 opened from the desktop or named on the command line comes in the same way.

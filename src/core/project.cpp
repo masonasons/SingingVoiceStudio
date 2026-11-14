@@ -927,22 +927,32 @@ std::vector<TempoChange> midi_tempo_changes(const MidiFile &midi) {
     return clean_tempo_changes(out);
 }
 
-//: the track's bend as [(tick, semitones)], the range resolved
+//: the track's bend as [(tick, semitones)], the range resolved: two
+//: semitones until RPN 0 first sets it, as MIDI starts, and a change of
+//: range moving a wheel already off centre, as a synthesiser hears it
 std::vector<std::pair<long, double>> bend_curve(const MidiTrack &track) {
+    // in the file's order where two fall on one tick
+    auto by_tick = [](const std::pair<long, int> &a, const std::pair<long, int> &b) { return a.first < b.first; };
     auto ranges = track.bend_range;
-    std::sort(ranges.begin(), ranges.end());
-    if (ranges.empty()) ranges.push_back({0, 2});
+    std::stable_sort(ranges.begin(), ranges.end(), by_tick);
     auto bends = track.bends;
-    std::sort(bends.begin(), bends.end());
+    std::stable_sort(bends.begin(), bends.end(), by_tick);
     std::vector<std::pair<long, double>> out;
-    for (const auto &b : bends) {
-        int span = ranges[0].second;
-        for (const auto &r : ranges) {
-            if (r.first <= b.first) span = r.second;
-            else break;
+    int span = 2, wheel = 0;
+    size_t r = 0;
+    auto ranges_to = [&](long tick, bool through) {
+        for (; r < ranges.size() && (through || ranges[r].first <= tick); ++r) {
+            if (ranges[r].second == span) continue;
+            span = ranges[r].second;
+            if (wheel != 0) out.push_back({ranges[r].first, wheel / 8192.0 * span});
         }
+    };
+    for (const auto &b : bends) {
+        ranges_to(b.first, false);
+        wheel = b.second;
         out.push_back({b.first, b.second / 8192.0 * span});
     }
+    ranges_to(0, true);
     return out;
 }
 
