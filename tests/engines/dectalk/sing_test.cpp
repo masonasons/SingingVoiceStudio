@@ -11,7 +11,7 @@
 // sent -- the same phonemes, apart from DECtalk's own allophones (which are
 // listed), and every one exactly as many frames long as asked.
 //
-// "scale" holds an open vowel on every note of DECtalk's scale, C2 to C5, in
+// "scale" holds an open vowel on every note of DECtalk's scale, C1 to G5, in
 // three voices, and the mean F0 of each, over whole cycles of DECtalk's
 // vibrato, is measured against equal temperament at A = 440 Hz. "pitch" does
 // the same for a few notes and voices. "timing" sings a vowel straight
@@ -597,7 +597,7 @@ int main(int argc, char **argv) {
         {65, 0.25, "f l AY t s"}, {64, 1.0, "s t OW n z"},
     }, 31);
     std::vector<Syl> scale_syls;
-    for (int m = 36; m <= 72; ++m) scale_syls.push_back({m, 1.5, "AA"});
+    for (int m = 24; m <= 79; ++m) scale_syls.push_back({m, 1.5, "AA"});
     Phrase scale = make_phrase(60, scale_syls, 0);
     Phrase pitch = make_phrase(60, {
         {43, 1, "AA"}, {48, 1, "AA"}, {52, 1, "AA"}, {55, 1, "AA"},
@@ -711,33 +711,39 @@ int main(int argc, char **argv) {
             const std::vector<float> &x = s.samples;
 
             if (job.phrase == &pitch || job.phrase == &scale) {
-                // the mean over whole vibrato cycles (6.25 Hz: 0.96 s is six)
+                // the mean over whole vibrato cycles (6.25 Hz: 0.96 s is six),
+                // low-passed below the fifth harmonic, without which the
+                // notes below G1 read up to 20 cents sharp
                 double worst = 0;
                 std::string line;
                 for (size_t i = 0; i + 1 < job.phrase->notes.size(); ++i) {
                     double want_hz = midi_hz(job.phrase->notes[i].midi);
                     double a = curve.note_start(i), b = curve.note_end(i);
                     double t0 = a + 0.25, t1 = std::min(b - 0.05, t0 + 0.96);
+                    long s1 = std::min(long(x.size()), at_ms(1000 * (b + 0.15))), s0 = std::min(s1, at_ms(1000 * a));
+                    std::vector<double> lp = lowpass(std::vector<float>(x.begin() + s0, x.begin() + s1), 4 * want_hz);
+                    std::vector<float> y(lp.begin(), lp.end());
                     double sum = 0;
                     int n = 0;
                     for (double t = t0; t < t1; t += 0.01) {
-                        double v = f0_between(x, at_ms(1000 * t), at_ms(1000 * t) + std::max(at_ms(25), long(3 * kSampleRate / want_hz)),
+                        long at = at_ms(1000 * (t - a));
+                        double v = f0_between(y, at, at + std::max(at_ms(25), long(3 * kSampleRate / want_hz)),
                                               want_hz / 1.25, want_hz * 1.25);
                         if (v > 0) {
                             sum += v;
                             ++n;
                         }
                     }
-                    double c = n ? cents(sum / n, want_hz) : 999;
+                    double hz = n ? sum / n : 0.0;
+                    double c = n ? cents(hz, want_hz) : 999;
                     worst = std::max(worst, std::fabs(c));
                     char buf[32];
                     std::snprintf(buf, sizeof buf, " %+.1f", c);
                     line += buf;
                     if (job.phrase == &pitch)
-                        std::printf("    %4d  %8.2f  %8.2f  %+6.1f\n", job.phrase->notes[i].midi, want_hz,
-                                    n ? sum / n : 0.0, c);
+                        std::printf("    %4d  %8.2f  %8.2f  %+6.1f\n", job.phrase->notes[i].midi, want_hz, hz, c);
                 }
-                if (job.phrase == &scale) std::printf("    C2..C5, cents:%s\n", line.c_str());
+                if (job.phrase == &scale) std::printf("    C1..G5, cents:%s\n", line.c_str());
                 std::printf("    worst %.1f cents\n", worst);
                 if (worst > 8) ++failures;
             }

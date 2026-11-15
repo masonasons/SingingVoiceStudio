@@ -47,20 +47,43 @@ sed -i '' 's/UINT16 uFlags, HANDLE16 hDev,/UINT16 uFlags, HWAVEOUT hDev,/' "$DAP
 # before it takes the name the program hands it; the note is nothing
 sed -i '' 's|fprintf(stderr,"libtts.so: Using default dictionary name\\n");|;|' "$DAPI/lts/lsw_main.c"
 
+# DECtalk's range widened from C2 - C5 to C1 - G5, as in
+# cmake/engines/dectalk.cmake (which says why). dt_edit replaces every FROM in
+# a file by its TO, and stops if one is missing.
+dt_edit() {
+    perl -0777 -i -pe '
+        BEGIN { $f = $ARGV[0]; @p = splice @ARGV, 1 }
+        my @q = @p;
+        while (@q) {
+            my ($from, $to) = splice @q, 0, 2;
+            s/\Q$from\E/$to/g or die "$f is not as this script expects: no \"$from\"\n";
+        }' "$@"
+}
+dt_edit "$DAPI/ph/ph_drwt01.c" \
+    '#define HIGHEST_F0        5121' '#define HIGHEST_F0        7700' \
+    '#define LOWEST_F0          500' '#define LOWEST_F0          (pDph_t->f0mode == SINGING ? 300 : 500)' \
+    'else if (f0command >= 2000)' 'else if (f0command >= 2000 || (f0command >= 1988 && pDph_t->f0mode == SINGING))' \
+    'if (*psF0command <= 37)' 'if (*psF0command <= 44)' \
+    'notetab[*psF0command - 1]' 'notetab[*psF0command + (*psF0command < 0 ? 12 : 11)]'
+dt_edit "$DAPI/ph/ph_sort.c" '((*psCurr_f0%1000) <= 37)' '((*psCurr_f0%1000) <= 44)'
+dt_edit "$DAPI/ph/ph_vdefi.c" '50, 350,' '50, 500,'
+
 # DECtalk's scale retuned to A = 440 Hz, as scripts/build_dectalk.ps1 does to
 # the Windows DLL (it explains the values: they are the ones whose sung pitch,
 # through DECtalk's own pitch arithmetic and averaged over its vibrato, is
-# nearest each equal-tempered note, its vibrato kept). Here they are written
-# into the copy of ph/ph_romi.c before it is compiled; the table must be there
-# exactly once, with DECtalk's original values (or these, if the copy is
-# already retuned).
+# nearest each equal-tempered note, its vibrato kept), for notes -12 to -1
+# and 1 to 44. Here they are written into the copy of ph/ph_romi.c before it
+# is compiled; the table must be there exactly once, with DECtalk's original
+# values (or these, if the copy is already retuned).
 perl -0777 -pi -e '
     my @orig = qw(640 678 718 761 806 854 905 959 1016 1076 1140 1208 1280 1356 1437
                   1522 1613 1709 1810 1918 2032 2152 2280 2416 2560 2712 2874 3044 3226
                   3418 3620 3836 4064 4304 4560 4832 5120);
-    my @tuned = qw(640 678 718 761 806 853 904 958 1015 1075 1139 1206 1278 1353 1434
+    my @tuned = qw(321 339 360 381 404 427 453 480 508 538 570 604
+                   640 678 718 761 806 853 904 958 1015 1075 1139 1206 1278 1353 1434
                    1519 1610 1704 1804 1913 2028 2146 2274 2407 2554 2704 2860 3026 3212
-                   3411 3601 3812 4049 4267 4540 4783 5092);
+                   3411 3601 3812 4049 4267 4540 4783 5092 5355 5688 6091 6391 6762 7225
+                   7536);
     my $n = () = /const short notetab\[\]\s*=\s*\{[^}]*\}/g;
     die "notetab is in ph_romi.c $n times, not once\n" unless $n == 1;
     s#(const short notetab\[\]\s*=\s*\{)([^}]*)(\})#

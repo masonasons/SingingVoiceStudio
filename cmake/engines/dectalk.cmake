@@ -3,8 +3,9 @@
 # On Windows DECtalk is compiled into the program (SVS_DECTALK_STATIC, on to
 # begin with): the same sources, defines and include folders as the "Release
 # - ENGLISH_US" build of DECtalk.dll (third_party/dectalk, dapi/src/DECtalk
-# API.vcxproj), compiled with the program's own GCC, with DECtalk's scale
-# retuned as scripts/build_dectalk.ps1 retunes the DLL's. The engine's own
+# API.vcxproj), compiled with the program's own GCC, with DECtalk's range of
+# notes widened and its scale retuned as scripts/build_dectalk.ps1 does the
+# DLL's. The engine's own
 # names are made local to it, so none of them meets another engine's, and
 # only the six entry points src/voices/dectalk.cpp calls are left, and the
 # four more the engine's test calls. Its US English dictionary is compiled
@@ -87,15 +88,33 @@ function(svs_dectalk_copy unit)
   configure_file(${DT_OUT}/next/${unit} ${DT_OUT}/${unit} COPYONLY)
 endfunction()
 
-# DECtalk's scale retuned to A = 440 Hz: the values scripts/build_dectalk.ps1
-# works out and patches into the DLL, and scripts/build_dectalk_mac.sh writes
-# into its copy of ph_romi.c (see either for why they are these).
+# DECtalk's range widened from C2 - C5 to C1 - G5: notes 38 to 44 above C5,
+# with the highest F0 raised from 512.1 to 770 Hz and [:dv ap] from 350 to
+# 500 Hz, and notes -1 to -12 below C2, with a sung F0 allowed down to 30 Hz.
+# The F0 commands just under 2000 that carry the low notes are stress
+# gestures in speech, so they are taken as notes only when singing.
+# scripts/build_dectalk.ps1 and scripts/build_dectalk_mac.sh do the same.
+svs_dectalk_copy(ph/ph_drwt01.c
+  "#define HIGHEST_F0        5121" "#define HIGHEST_F0        7700"
+  "#define LOWEST_F0          500" "#define LOWEST_F0          (pDph_t->f0mode == SINGING ? 300 : 500)"
+  "else if (f0command >= 2000)" "else if (f0command >= 2000 || (f0command >= 1988 && pDph_t->f0mode == SINGING))"
+  "if (*psF0command <= 37)" "if (*psF0command <= 44)"
+  "notetab[*psF0command - 1]" "notetab[*psF0command + (*psF0command < 0 ? 12 : 11)]")
+# ph_drwt0.c includes ph_drwt01.c, so it is compiled from beside the copy
+svs_dectalk_copy(ph/ph_drwt0.c "#include \"ph_drwt01.c\"" "#include \"ph_drwt01.c\"")
+svs_dectalk_copy(ph/ph_sort.c "((*psCurr_f0%1000) <= 37)" "((*psCurr_f0%1000) <= 44)")
+svs_dectalk_copy(ph/ph_vdefi.c "50, 350," "50, 500,")
+
+# DECtalk's scale, C1 to G5, retuned to A = 440 Hz: the values
+# scripts/build_dectalk.ps1 works out (see there for why they are these), as
+# scripts/build_dectalk_mac.sh writes them too.
 set(DT_NOTES_ORIGINAL 640 678 718 761 806 854 905 959 1016 1076 1140 1208 1280 1356 1437 1522 1613 1709
                       1810 1918 2032 2152 2280 2416 2560 2712 2874 3044 3226 3418 3620 3836 4064 4304 4560
                       4832 5120)
-set(DT_NOTES_TUNED 640 678 718 761 806 853 904 958 1015 1075 1139 1206 1278 1353 1434 1519 1610 1704
+set(DT_NOTES_TUNED 321 339 360 381 404 427 453 480 508 538 570 604
+                   640 678 718 761 806 853 904 958 1015 1075 1139 1206 1278 1353 1434 1519 1610 1704
                    1804 1913 2028 2146 2274 2407 2554 2704 2860 3026 3212 3411 3601 3812 4049 4267 4540
-                   4783 5092)
+                   4783 5092 5355 5688 6091 6391 6762 7225 7536)
 file(READ ${DT_SRC}/ph/ph_romi.c romi)
 string(REGEX MATCHALL "const short notetab\\[\\][ \t\r\n]*=[ \t\r\n]*{[^}]*}" tables "${romi}")
 list(LENGTH tables n)

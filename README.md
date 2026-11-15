@@ -9,7 +9,7 @@ by SoundFonts:
 | engine | voices | numbers | what it is |
 |---|---|---|---|
 | **VocalWriter 2.0** (KAE Labs, 2005) | 87, the bank's own, by program number | 0 - 86 | the original's PowerPC code lifted into C (`engine/`, VocalWriterC) |
-| **DECtalk** | Paul, Betty, Harry, Frank, Dennis, Kit, Ursula, Rita, Wendy | 1000 - 1008 | github.com/dectalk/dectalk, sung through its phoneme `<duration,pitch>` notation |
+| **DECtalk** | Paul, Betty, Harry, Frank, Dennis, Kit, Ursula, Rita, Wendy | 1000 - 1008 | github.com/dectalk/dectalk, sung through its phoneme `<duration,pitch>` notation, its range of notes widened from C2 - C5 to C1 - G5 |
 | **SSI-263** | Standard, Deep, Bright, Child | 2000 - 2003 | the chip itself, driven at register level (github.com/tgeczy/ssi263-speech) |
 | **Microsoft** | Sam, Mike, Mary, each plain, in Hall, in Stadium, in Space, Whisper, RoboSoft One to Six | 3000 - 3050 | the SAPI 5 engine rebuilt in C, with the SAPI 4 voice modes (github.com/KamiKitsune420/ms-sam-mike-mary-decomp) |
 | **MacinTalk** | Agnes, Albert, Bad News, Bahh, Bells, Boing, Bruce, Bubbles, Cellos, Deranged, Fred, Good News, Hysterical, Junior, Kathy, Pipe Organ, Princess, Ralph, Trinoids, Vicki, Victoria, Whisper, Zarvox, from each of Mac OS X 10.4 Tiger, 10.5 Leopard, 10.6 Snow Leopard and 10.7 Lion, and Alex from 10.5 on | 4000 - 4022, 4100 - 4123, 4200 - 4223, 4300 - 4323 | Apple's own engines: on Windows run by Panthera's host (github.com/tgeczy/panthera-speech) and sung through Apple's TUNE notation; on a Mac the system's own voices, spoken from phonemes and retuned to the score (see below) |
@@ -495,9 +495,10 @@ That gives `build\SingingVoiceStudio.exe`, the editor, and `build\svs.exe`, the
 same program as a console program. Both are linked statically and need no
 DLLs of their own. DECtalk is compiled into both (cmake/engines/dectalk.cmake):
 the sources, defines and settings of the "Release - ENGLISH_US" build of its
-DLL, compiled with GCC, with its scale retuned as the DLL's is, so it sings as
-the DLL does. Its US English dictionary is compiled in too, and written to the
-settings folder (`%APPDATA%\Singing Voice Studio`) for DECtalk to open. The
+DLL, compiled with GCC, with its range of notes widened and its scale retuned
+as the DLL's are, so it sings as the DLL does. Its US English dictionary is
+compiled in too, and written to the settings folder
+(`%APPDATA%\Singing Voice Studio`) for DECtalk to open. The
 dictionary is taken from `voices\dectalk\dtalk_us.dic` if it is there, which
 Visual Studio builds from DECtalk's word list:
 

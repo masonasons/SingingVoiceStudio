@@ -114,7 +114,9 @@ if [ ! -x "$WX/bin/wx-config" ] || [ "$(cat "$WX/.commit" 2>/dev/null)" != "$WX_
 fi
 
 # -- 2. DECtalk, with clang ------------------------------------------------------
-if [ "$CLEAN" = 1 ] || [ ! -f voices/dectalk/libtts.dylib ] || [ ! -f voices/dectalk/dtalk_us.dic ]; then
+# and again whenever its script is newer than the library
+if [ "$CLEAN" = 1 ] || [ ! -f voices/dectalk/libtts.dylib ] || [ ! -f voices/dectalk/dtalk_us.dic ] ||
+   [ scripts/build_dectalk_mac.sh -nt voices/dectalk/libtts.dylib ]; then
     say "building DECtalk"
     if ! sh scripts/build_dectalk_mac.sh; then
         warn "DECtalk did not build; its voices will be listed as not installed"
