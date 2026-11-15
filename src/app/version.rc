@@ -1,0 +1,26 @@
+// version.rc -- the program's name and version, as Windows shows them in the
+// executable's properties and to a screen reader (JAWS's Insert+Ctrl+V). The
+// version is SVS_VERSION in CMakeLists.txt, through svs_version.h.
+#include "svs_version.h"
+
+1 VERSIONINFO
+FILEVERSION SVS_VERSION_NUMBERS
+PRODUCTVERSION SVS_VERSION_NUMBERS
+FILEOS 0x40004      // VOS_NT_WINDOWS32
+FILETYPE 0x1        // VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"    // US English, Unicode
+        BEGIN
+            VALUE "FileDescription", "Singing Voice Studio"
+            VALUE "FileVersion", SVS_VERSION_TEXT
+            VALUE "ProductName", "Singing Voice Studio"
+            VALUE "ProductVersion", SVS_VERSION_TEXT
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
