@@ -87,10 +87,11 @@ constexpr double kTailShare = 0.4;
 constexpr int kLoudDb = 2, kNasalSteps = 6, kSettledSteps = 10;
 //: the second formant
 constexpr int kF2 = 10;
-//: the pitches the board sings, in hertz: a phrase above them goes whole
-//: octaves down, and what still does not fit is held to the nearest. The
-//: shortest period it voices is 13 samples; at 12 its voicing step is 0.
-constexpr double kLowest = 50.0, kHighest = 740.0;
+//: the notes the board sings, E1 to F#5, and the pitches it is held to, in
+//: hertz: a phrase outside the notes goes whole octaves into them, and what
+//: still does not fit is held to the nearest. The shortest period it voices
+//: is 13 samples; at 12 its voicing step is 0.
+constexpr int kLowestNote = 28, kHighestNote = 78;
 constexpr double kMinHz = 40.0, kMaxHz = 765.0;
 
 //: the pitch the board sings at `t` seconds into the phrase, moved by
@@ -210,8 +211,8 @@ public:
         std::unique_ptr<prose_handle, void (*)(prose_h)> close(h, [](prose_h x) { prose_close(x); });
         prose_set_voice(h, v_);
 
-        // whole octaves down into the range the board sings
-        double lo = 1e9, hi = 0, shift = 1;
+        // whole octaves into the notes the board sings
+        double lo = 1e9, hi = -1e9, shift = 1;
         for (size_t i = 0; i < phrase.notes.size(); ++i) {
             bool voiced = false;
             for (const std::string &ph : phrase.notes[i].phonemes) {
@@ -219,11 +220,11 @@ public:
                 if (m && *m->prose) voiced = true;
             }
             if (!voiced) continue;
-            double hz = PitchCurve::midi_to_hz(curve.steady_midi_at((curve.note_start(i) + curve.note_end(i)) / 2));
-            lo = std::min(lo, hz);
-            hi = std::max(hi, hz);
+            double m = curve.steady_midi_at((curve.note_start(i) + curve.note_end(i)) / 2);
+            lo = std::min(lo, m);
+            hi = std::max(hi, m);
         }
-        while (hi * shift > kHighest && lo * shift / 2 >= kLowest) shift /= 2;
+        shift = std::pow(2.0, octaves_to_fit(lo, hi, kLowestNote, kHighestNote));
 
         std::vector<int16_t> pcm;
         // where each frame sung starts, in samples, and its pitch (0 unvoiced)

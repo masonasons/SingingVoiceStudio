@@ -56,6 +56,13 @@ private:
     double vib_cents_ = 0.0, vib_hz_ = 5.0, detune_ = 0.0, glide_ = 0.0;
 };
 
+//: The whole octaves a phrase whose notes go from `lo` to `hi` is moved, as
+//: few as it takes, to lie from `lowest` to `highest` (all MIDI notes), or
+//: as nearly as it can; what is still outside is sung at the nearest end.
+int octaves_to_fit(double lo, double hi, double lowest, double highest);
+//: The same done to a phrase, its rests moved with it but not counted.
+void fit_octaves(Phrase *phrase, double lowest, double highest);
+
 //: Turn VocalWriter's 0-127 controls into something an engine can use.
 double vibrato_depth_cents(int value);
 double vibrato_rate_hz(int value);

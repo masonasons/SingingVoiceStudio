@@ -50,7 +50,10 @@ inflection register every 32 samples, Microsoft's vocoder twenty pitch knots
 per acoustic unit, SharpVox a pitch in every 5 ms frame, BeSTspeech a pitch
 period in sixteenths of a sample on every one of its frames, Eloquence a whole
 period in every 5 ms frame and the Prose 2000 one in every 10 ms frame, both
-retuned to the curve afterwards. A new song, and one imported from MIDI,
+retuned to the curve afterwards. A phrase outside the notes an engine sings is
+moved whole octaves into them: C1 - G5 on DECtalk, F1 - B5 on BeSTspeech, E1 -
+D6 on Eloquence, E1 - F#5 on the Prose 2000, G#1 - G5 on MacinTalk 3 and F#1 -
+D6 on Apple's other engines. A new song, and one imported from MIDI,
 starts with the
 portamento and reverb VocalWriter's own songs have: a portamento of 40, and
 reverb room 40 at 24 per cent.

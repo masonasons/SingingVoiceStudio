@@ -966,6 +966,24 @@ Install survey() {
 }
 #endif
 
+// The lowest and highest pitches each engine sings: MacinTalk 3 holds 50 Hz
+// below 50, and from 800 Hz up sings a pitch some way below the one asked.
+double lowest_hz(Engine e) { return e == kMtk3 ? 50.0 : 45.0; }
+double highest_hz(Engine e) { return e == kMtk3 ? 790.0 : 1200.0; }
+// Boing takes the host down with it when a long line is pitched above about
+// 520 Hz (three eighths of that is what it sings, so its notes stop near F#3).
+double highest_hz(const VoiceDef &v) {
+    return std::strcmp(v.bundle, "Boing") == 0 ? 500.0 : highest_hz(v.engine);
+}
+// The notes a voice sings inside those pitches: G#1 to G5 on MacinTalk 3,
+// F#1 to D6 on the others, and up to F#3 for Boing. A phrase outside goes
+// whole octaves into them.
+void fit_voice(const VoiceDef &v, Phrase *phrase) {
+    double sung = std::strcmp(v.bundle, "Boing") == 0 ? 3.0 / 8.0 : 1.0;
+    auto note = [sung](double hz) { return 69.0 + 12.0 * std::log2(hz * sung / 440.0); };
+    fit_octaves(phrase, std::ceil(note(lowest_hz(v.engine))), std::floor(note(highest_hz(v))));
+}
+
 #ifdef _WIN32   // everything from here to the family sings through Panthera
 
 // -- a phrase as TUNE lines ----------------------------------------------------------
@@ -1177,16 +1195,6 @@ double tuned_hz(const Tuning *t, double hz) {
     double ask = hz;
     for (int k = 0; k < 4; ++k) ask = hz * std::pow(2.0, -offset_cents(t, ask) / 1200.0);
     return ask;
-}
-
-// The lowest and highest pitches each engine sings: MacinTalk 3 holds 50 Hz
-// below 50, and from 800 Hz up sings a pitch some way below the one asked.
-double lowest_hz(Engine e) { return e == kMtk3 ? 50.0 : 45.0; }
-double highest_hz(Engine e) { return e == kMtk3 ? 790.0 : 1200.0; }
-// Boing takes the host down with it when a long line is pitched above about
-// 520 Hz (three eighths of that is what it sings, so its notes stop near F#3).
-double highest_hz(const VoiceDef &v) {
-    return std::strcmp(v.bundle, "Boing") == 0 ? 500.0 : highest_hz(v.engine);
 }
 
 // Where a line's pitch points go, as fractions of it, and the pitch at each:
@@ -1756,7 +1764,9 @@ public:
         : host_(std::move(host)), gen_(gen), voice_(kVoices[voice]),
           tuning_(find_tuning(gen, kVoices[voice].bundle)) {}
 
-    Sung sing(const Phrase &phrase) override {
+    Sung sing(const Phrase &asked) override {
+        Phrase phrase = asked;
+        fit_voice(voice_, &phrase);
         Sung sung;
         if (phrase.notes.empty()) return sung;
         // Where the vowels can be measured and moved afterwards, the engine
@@ -2068,7 +2078,9 @@ class MacSinger : public Singer {
 public:
     MacSinger(const VoiceDef &voice, std::shared_ptr<MacCalibration> cal) : voice_(voice), cal_(std::move(cal)) {}
 
-    Sung sing(const Phrase &phrase) override {
+    Sung sing(const Phrase &asked) override {
+        Phrase phrase = asked;
+        fit_voice(voice_, &phrase);
         Sung sung;
         if (phrase.notes.empty()) return sung;
         PitchCurve curve(phrase);

@@ -872,13 +872,8 @@ private:
             hi = std::max(hi, m);
         }
         if (lo > hi) return;
-        const int top = kHighestMidi, bottom = kLowestMidi;
-        auto out_by = [&](int k) {
-            return std::max(0, hi + 12 * k - top) + std::max(0, bottom - (lo + 12 * k));
-        };
-        while (out_by(shift_ - 1) < out_by(shift_)) --shift_;
-        while (out_by(shift_ + 1) < out_by(shift_)) ++shift_;
-        clamped_ = out_by(shift_) > 0;
+        shift_ = octaves_to_fit(lo, hi, kLowestMidi, kHighestMidi);
+        clamped_ = hi + 12 * shift_ > kHighestMidi || lo + 12 * shift_ < kLowestMidi;
     }
 
     int number(const Placed &p) const {

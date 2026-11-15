@@ -21,6 +21,30 @@ double vibrato_rate_hz(int value) { return 3.0 + std::max(0, value) / 127.0 * 5.
 double detune_semitones(int value) { return value / 8192.0; }
 double portamento_seconds(int value) { return std::max(0, value) / 127.0 * 0.3; }
 
+int octaves_to_fit(double lo, double hi, double lowest, double highest) {
+    if (lo > hi) return 0;
+    auto out_by = [&](int k) {
+        return std::max(0.0, hi + 12 * k - highest) + std::max(0.0, lowest - (lo + 12 * k));
+    };
+    int k = 0;
+    while (out_by(k - 1) < out_by(k)) --k;
+    while (out_by(k + 1) < out_by(k)) ++k;
+    return k;
+}
+
+void fit_octaves(Phrase *phrase, double lowest, double highest) {
+    double lo = 1e9, hi = -1e9;
+    for (const SungNote &n : phrase->notes)
+        for (const std::string &ph : n.phonemes)
+            if (ph != kRest) {
+                lo = std::min(lo, double(n.midi));
+                hi = std::max(hi, double(n.midi));
+                break;
+            }
+    int k = octaves_to_fit(lo, hi, lowest, highest);
+    for (SungNote &n : phrase->notes) n.midi += 12 * k;
+}
+
 double PitchCurve::midi_to_hz(double midi) {
     return 440.0 * std::pow(2.0, (midi - 69.0) / 12.0);
 }
