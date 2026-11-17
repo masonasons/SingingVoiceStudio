@@ -168,6 +168,10 @@ RawTrack read_track(const unsigned char *b, size_t n) {
                     rpn_msb[ch] = v;
                 else if (a == 100)
                     rpn_lsb[ch] = v;
+                // choosing an NRPN takes the data entry away from the RPN:
+                // a GS file's filter and vibrato settings are not bend ranges
+                else if (a == 99 || a == 98)
+                    rpn_msb[ch] = rpn_lsb[ch] = 127;
                 else if ((a == 6 || a == 38) && rpn_msb[ch] == 0 && rpn_lsb[ch] == 1)
                     fine(c.controls["detune"], a == 38, tick, v);
                 else if (a == kChorusCC || a == kChorusCC + 32)

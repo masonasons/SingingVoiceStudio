@@ -50,7 +50,7 @@ enum {
     ID_EXPORT_MIDI, ID_ADD_WORD_EXISTING, ID_OCTAVE_INSTRUMENTS, ID_ADD_TEXT, ID_REMOVE_VOLUMES,
     ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN, ID_SOUNDBANKS,
     ID_NOTE_TO_REST, ID_TRACK_LOUDER, ID_TRACK_QUIETER, ID_TRACK_PAN_LEFT, ID_TRACK_PAN_RIGHT,
-    ID_SHOW_UNFINISHED,
+    ID_SHOW_UNFINISHED, ID_TRACK_CUT, ID_TRACK_COPY, ID_TRACK_PASTE,
 };
 
 //: A beat is a quarter note, so a sixteenth is a quarter of a beat: the step
@@ -399,6 +399,9 @@ wxMenu *Studio::track_menu() {
     track->Append(ID_TRACK_EDIT, K("&Track settings... (Enter on a track)"), "Name, voice, volume and pan");
     track->Append(ID_TRACK_REMOVE, K("&Remove track (Delete on a track)"),
                   "Remove the selected tracks and everything in them");
+    track->Append(ID_TRACK_CUT, K("&Cut track (Ctrl+X on a track)"), "Remove the selected tracks and keep them to paste");
+    track->Append(ID_TRACK_COPY, K("Cop&y track (Ctrl+C on a track)"), "Keep the selected tracks to paste");
+    track->Append(ID_TRACK_PASTE, K("P&aste track (Ctrl+V on a track)"), "Put the kept tracks in after the selected one");
     track->AppendSeparator();
     // No tab, so no accelerator: S and M would be unusable in every text field.
     track->Append(ID_TRACK_MUTE, K("&Mute or unmute (M on a track)"), "Silence this track");
@@ -570,6 +573,9 @@ void Studio::build_menu() {
     on(ID_TRACK_BACKING, &Studio::on_track_backing);
     on(ID_TRACK_EDIT, &Studio::on_track_edit);
     on(ID_TRACK_REMOVE, &Studio::on_track_remove);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { copy_tracks(false); }, ID_TRACK_COPY);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { copy_tracks(true); }, ID_TRACK_CUT);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { paste_tracks(); }, ID_TRACK_PASTE);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { toggle_track(false); }, ID_TRACK_MUTE);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { toggle_track(true); }, ID_TRACK_SOLO);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { move_tracks(-1); }, ID_TRACK_UP);
@@ -931,6 +937,7 @@ void Studio::on_keys(wxCommandEvent &) {
         "Enter on a track  its name, voice, volume and pan, or a backing track's file and where it starts",
         "M on a track  mute it, S  solo it",
         "Delete on a track  remove it, or every selected track: Shift with the arrow keys selects more than one",
+        "Ctrl+C, Ctrl+X, Ctrl+V on a track  copy, cut and paste the selected tracks, everything in them",
         "Ctrl+Up or Ctrl+Down on a track  reorder the parts",
         "Alt+Up or Alt+Down on a track  transpose every note of the selected tracks a semitone, Alt+Shift+Up or "
         "Alt+Shift+Down an octave",
@@ -1182,6 +1189,10 @@ void Studio::on_track_key(wxKeyEvent &evt) {
         move_tracks(code == WXK_UP ? -1 : 1);
     else if (evt.ControlDown() && !evt.ShiftDown() && !evt.AltDown() && code == 'A')
         select_all_tracks();
+    else if (evt.ControlDown() && !evt.ShiftDown() && !evt.AltDown() && (code == 'C' || code == 'X'))
+        copy_tracks(code == 'X');
+    else if (evt.ControlDown() && !evt.ShiftDown() && !evt.AltDown() && code == 'V')
+        paste_tracks();
     else if (code == WXK_SPACE && plain)
         on_play_stop(e);
     else if (code == 'S' && plain)
@@ -1505,6 +1516,67 @@ void Studio::on_track_remove(wxCommandEvent &) {
         sync_tracks(std::min(rows[0], int(song_.tracks.size()) - 1));
         sync(track().cursor);
         say(W("removed " + what + ", " + plural(song_.tracks.size(), "track") + " left"));
+    });
+}
+
+//: The selected tracks, or the one the keyboard is on.
+std::vector<int> Studio::selected_tracks() const {
+    std::vector<int> rows;
+    for (int r : tracks_list_->SelectedRows())
+        if (r >= 0 && r < int(song_.tracks.size())) rows.push_back(r);
+    if (rows.empty()) rows = {track_at()};
+    return rows;
+}
+
+//: Ctrl+C and Ctrl+X on a track: the selected tracks to the clipboard as
+//: text, like notes. Cut takes them out too, without asking: it can be undone.
+void Studio::copy_tracks(bool cut) {
+    undoable(cut ? "cut tracks" : "copy tracks", [&] {
+        std::vector<int> rows = selected_tracks();
+        if (cut && rows.size() >= song_.tracks.size()) {
+            say("a song needs at least one track, so not every track can be cut");
+            return;
+        }
+        std::vector<Track> picked;
+        for (int r : rows) picked.push_back(song_.tracks[size_t(r)]);
+        if (!to_clipboard(tracks_to_clipboard(picked))) {
+            say("the clipboard is busy, try again");
+            return;
+        }
+        std::string what = rows.size() == 1 ? picked[0].name : plural(rows.size(), "track");
+        if (!cut) {
+            say(W("copied " + what));
+            return;
+        }
+        for (auto it = rows.rbegin(); it != rows.rend(); ++it) song_.tracks.erase(song_.tracks.begin() + *it);
+        touch();
+        sync_tracks(std::min(rows[0], int(song_.tracks.size()) - 1));
+        sync(track().cursor);
+        say(W("cut " + what + ", " + plural(song_.tracks.size(), "track") + " left"));
+    });
+}
+
+//: Ctrl+V on a track: the tracks on the clipboard, after the selected one.
+void Studio::paste_tracks() {
+    undoable("paste tracks", [&] {
+        std::vector<Track> added = tracks_from_clipboard(from_clipboard());
+        if (added.empty()) {
+            say("there are no tracks on the clipboard");
+            return;
+        }
+        int at = selected_tracks().back() + 1;
+        song_.tracks.insert(song_.tracks.begin() + at, added.begin(), added.end());
+        resolve_voice_names(song_, voices_);
+        touch();
+        sync_tracks(at);
+        sync();
+        switching_ = true;              // the notes list stays on the first pasted
+        for (size_t k = 1; k < added.size(); ++k) tracks_list_->SelectRow(at + int(k));
+        switching_ = false;
+        tracks_list_->SetFocus();
+        std::string names;
+        for (size_t k = 0; k < added.size() && k < 4; ++k) names += (k ? ", " : "") + added[k].name;
+        say(W("pasted " + (added.size() == 1 ? names : plural(added.size(), "track") + ": " + names)));
     });
 }
 

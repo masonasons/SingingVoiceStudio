@@ -325,6 +325,9 @@ Song load_project(const std::string &path);
 //: the clipboard: notes as text, so they survive between two copies
 std::string notes_to_clipboard(const std::vector<Note> &notes);
 std::vector<Note> notes_from_clipboard(const std::string &text);
+//: and whole tracks, each as a project keeps it
+std::string tracks_to_clipboard(const std::vector<Track> &tracks);
+std::vector<Track> tracks_from_clipboard(const std::string &text);
 
 //: the document as JSON text, for comparing two states (undo, dirty)
 std::string song_fingerprint(const Song &song);

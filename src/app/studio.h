@@ -128,6 +128,9 @@ private:
     bool takes_notes();
     void on_track_edit(wxCommandEvent &);
     void on_track_remove(wxCommandEvent &);
+    std::vector<int> selected_tracks() const;
+    void copy_tracks(bool cut);
+    void paste_tracks();
     void move_tracks(int delta);
     void select_all_tracks();
     void transpose_tracks(int by);

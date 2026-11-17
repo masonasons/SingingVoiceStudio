@@ -589,6 +589,7 @@ Ctrl and Option for Alt, and Option+H to hear a note.
 | Enter on a track | its name, voice, volume, pan and voice controls; a backing track's file and where it starts |
 | M / S on a track | mute / solo |
 | Delete on a track | remove it, or every selected track |
+| Ctrl+C / Ctrl+X / Ctrl+V on a track | copy, cut and paste the selected tracks, everything in them |
 | Ctrl+A on a track | select every track |
 | Alt+Up / Alt+Down on a track | transpose every note of the selected tracks a semitone; with Shift an octave |
 | Ctrl+Shift+Up / Ctrl+Shift+Down on a track | the volume of the selected tracks 1 per cent up or down |
