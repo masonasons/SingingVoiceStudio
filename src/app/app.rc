@@ -9,3 +9,5 @@
 // sharp at any display scaling, per monitor, rather than blurred by Windows
 #define wxUSE_DPI_AWARE_MANIFEST 2
 #include "wx/msw/wx.rc"
+// the program's name and version
+#include "version.rc"

@@ -1,0 +1,4 @@
+// svs_version.h -- written by CMakeLists.txt from SVS_VERSION.
+#pragma once
+#define SVS_VERSION_TEXT "@SVS_VERSION@"
+#define SVS_VERSION_NUMBERS @SVS_VERSION_NUMBERS@

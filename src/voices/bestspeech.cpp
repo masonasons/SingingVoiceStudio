@@ -61,6 +61,9 @@ constexpr double kCutBack = 2.0;
 constexpr double kEdge = 0.03;
 //: the shortest and longest periods sung, in sixteenths of a sample
 constexpr int kMinPeriod = 11 * 16, kMaxPeriod = 0xFFF;
+//: the notes between them, F1 to B5: a phrase outside goes whole octaves
+//: into them
+constexpr int kLowestNote = 29, kHighestNote = 83;
 //: a silence no longer than this, in samples, is one of the engine's own
 //: frames between two sounds, and the sound after it is brought in over
 //: kJoinFade samples; a stop's closure is longer, and its release keeps
@@ -174,7 +177,9 @@ public:
         if (h_) bst_close(h_);
     }
 
-    Sung sing(const Phrase &phrase) override {
+    Sung sing(const Phrase &asked) override {
+        Phrase phrase = asked;
+        fit_octaves(&phrase, kLowestNote, kHighestNote);
         Sung sung;
         if (!h_) {
             sung.error = "BeSTspeech could not be started";

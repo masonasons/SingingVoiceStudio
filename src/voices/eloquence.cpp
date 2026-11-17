@@ -109,8 +109,11 @@ constexpr double kTailShare = 0.4;
 //: how far the first two formants may move between two frames, in hertz,
 //: for a vowel to be still where it is held
 constexpr int kSteadyHz = 20;
-//: the lowest and highest f0 sung, in hertz
+//: the lowest and highest f0 sung, in hertz, and the notes the engine
+//: sings, E1 to D6 (above 1200 Hz it holds 1200): a phrase outside them goes
+//: whole octaves into them
 constexpr double kMinHz = 40, kMaxHz = 1500;
+constexpr int kLowestNote = 28, kHighestNote = 86;
 
 //: the pitch sung at `t` seconds into the phrase
 double sung_hz(const PitchCurve &curve, double t) {
@@ -265,7 +268,9 @@ public:
         engine_.reset();
     }
 
-    Sung sing(const Phrase &phrase) override {
+    Sung sing(const Phrase &asked) override {
+        Phrase phrase = asked;
+        fit_octaves(&phrase, kLowestNote, kHighestNote);
         Sung sung;
         if (phrase.notes.empty()) return sung;
         PitchCurve curve(phrase);

@@ -16,8 +16,9 @@
 // DECtalk sings the way its own songs are written (the reference guide's
 // "Happy Birthday", samplosf\src\data\birthday.txt): in phoneme mode, one
 // phoneme for each sound, each with a length in milliseconds and a note of
-// DECtalk's scale, "dey<600,10>". Notes 1 to 37 are C2 to C5. A clause sung
-// in notes is in DECtalk's singing mode, and DECtalk does the rest itself:
+// DECtalk's scale, "dey<600,10>". Notes 1 to 37 are C2 to C5; as built here,
+// 38 to 44 go on to G5 and -1 to -12 down to C1. A clause sung in notes is
+// in DECtalk's singing mode, and DECtalk does the rest itself:
 // each new note is reached by a straight glide over 100 ms from the start
 // of the phoneme that asks for it, and every note carries DECtalk's own
 // vibrato, 6.3 Hz and +-2.05 Hz whatever the note (so deep on low notes and
@@ -36,12 +37,12 @@
 //
 //   The scale is DECtalk's table of notes (notetab), retuned when DECtalk is
 //   built (scripts/build_dectalk.ps1 says how; scripts/build_dectalk_mac.sh
-//   does the same on macOS): every note from C2 to C5 comes out within about
+//   does the same on macOS): every note from C1 to G5 comes out within about
 //   a cent of equal temperament at A = 440 Hz, as an average over its
-//   vibrato, and every note keeps its vibrato. A phrase that
-//   goes outside C2 to C5 is sung whole octaves up or down, and what still
-//   does not fit is sung on the nearest end of the scale. The voices make no
-//   difference to the pitch of a note.
+//   vibrato (below C2 within three cents), and every note keeps its
+//   vibrato. A phrase that goes outside C1 to G5 is sung whole octaves up or
+//   down, and what still does not fit is sung on the nearest end of the
+//   scale. The voices make no difference to the pitch of a note.
 //
 // So the song's own vibrato controls and the mod wheel do not reach DECtalk:
 // its vibrato cannot be changed or turned off in singing mode, and it is
@@ -50,8 +51,8 @@
 // hertz (which slide straight from one target to the next over a phoneme,
 // with no vibrato) only in a clause that starts with a target in hertz, and
 // such a clause is not in singing mode: it loses the 4190/4096 that brings
-// DECtalk's scale to concert pitch, and it cannot go above 512 Hz, a
-// little under C5. A note in hertz would also slide across its whole vowel
+// DECtalk's scale to concert pitch, and it cannot go above 770 Hz, a
+// little under G5. A note in hertz would also slide across its whole vowel
 // rather than bend inside it. So a bend is followed only as far as DECtalk's
 // scale can: each phoneme takes the semitone nearest the bent pitch at its
 // start (after any portamento has arrived), and a new note number is sent
@@ -186,10 +187,12 @@ constexpr double kFrameSeconds = double(kFrame) / kDtRate;
 //: it takes ((ms + 4) * 10) >> 6, so ms + 4 must be ceil(6.4 * frames).
 int ms_for_frames(int frames) { return (64 * frames + 9) / 10 - 4; }
 
-//: DECtalk's scale: note 1 is C2, MIDI 36, and note 37 is C5, MIDI 72.
-constexpr int kNoteBase = 35;
-constexpr int kLowestNote = 1, kHighestNote = 37;
-double note_hz(int note) { return 440.0 * std::pow(2.0, (note + kNoteBase - 69) / 12.0); }
+//: DECtalk's scale: note 1 is C2, MIDI 36, and note 44 is G5, MIDI 79; below
+//: C2 the notes go on from -1, B1, to -12, C1, MIDI 24. There is no note 0.
+constexpr int kLowestMidi = 24, kHighestMidi = 79;
+int dt_note(int midi) { return midi >= 36 ? midi - 35 : midi - 36; }
+int dt_midi(int note) { return note > 0 ? note + 35 : note + 36; }
+double note_hz(int note) { return 440.0 * std::pow(2.0, (dt_midi(note) - 69) / 12.0); }
 
 //: The note numbers go on the first phoneme of each note, and on any later
 //: one whose pitch differs (a bend). That starts DECtalk's glide where the
@@ -655,13 +658,15 @@ struct Voice {
 // Sung, every vowel is stressed and held, and four of the voices (Paul,
 // Harry, Dennis and Rita) then go past full scale inside DECtalk, which
 // clips. Each voice's loudness (g5, the gain into its first formant, in dB)
-// is set so that the loudest vowels on the highest notes peak at about
-// -1.5 dB (0.74 to 0.86 of full scale, nothing clipped): 6 dB under
-// DECtalk's own for Paul, 9 for Harry, a few or none for the others. The
-// gains after it even the voices out: each was sung through ten vowels on
-// notes across its range at full velocity and scaled so that its median
-// peak is 0.5, as the SSI-263's are. Wendy whispers. Val is left out: it is
-// where DECtalk keeps a voice of the user's own, and here it is only Paul.
+// is set so that the loudest vowels on C5 peak at about -1.5 dB (0.74 to
+// 0.86 of full scale, nothing clipped): 6 dB under DECtalk's own for Paul, 9
+// for Harry, a few or none for the others. Above C5 they peak up to 5 dB
+// higher and may clip, as a lower g5 would turn down the vowels but not the
+// unvoiced consonants. The gains after it even the voices out: each was sung
+// through ten vowels on notes across its range at full velocity and scaled
+// so that its median peak is 0.5, as the SSI-263's are. Wendy whispers. Val
+// is left out: it is where DECtalk keeps a voice of the user's own, and here
+// it is only Paul.
 const Voice kVoices[] = {
     {"Paul", "[:np][:dv g5 80]", 1.24},   {"Betty", "[:nb][:dv g5 78]", 1.21},
     {"Harry", "[:nh][:dv g5 72]", 1.56},  {"Frank", "[:nf][:dv g5 84]", 1.15},
@@ -854,7 +859,7 @@ private:
         }
     }
 
-    // DECtalk sings from C2 to C5. A phrase that goes outside that is moved
+    // DECtalk sings from C1 to G5. A phrase that goes outside that is moved
     // by whole octaves until it fits, or fits as nearly as it can, so that
     // the tune stays the tune; whatever is still outside is sung at the end
     // of the scale.
@@ -867,18 +872,13 @@ private:
             hi = std::max(hi, m);
         }
         if (lo > hi) return;
-        const int top = kHighestNote + kNoteBase, bottom = kLowestNote + kNoteBase;
-        auto out_by = [&](int k) {
-            return std::max(0, hi + 12 * k - top) + std::max(0, bottom - (lo + 12 * k));
-        };
-        while (out_by(shift_ - 1) < out_by(shift_)) --shift_;
-        while (out_by(shift_ + 1) < out_by(shift_)) ++shift_;
-        clamped_ = out_by(shift_) > 0;
+        shift_ = octaves_to_fit(lo, hi, kLowestMidi, kHighestMidi);
+        clamped_ = hi + 12 * shift_ > kHighestMidi || lo + 12 * shift_ < kLowestMidi;
     }
 
     int number(const Placed &p) const {
-        int n = int(std::lround(p.midi)) + 12 * shift_ - kNoteBase;
-        return std::max(kLowestNote, std::min(kHighestNote, n));
+        int m = int(std::lround(p.midi)) + 12 * shift_;
+        return dt_note(std::max(kLowestMidi, std::min(kHighestMidi, m)));
     }
 
     void build() {

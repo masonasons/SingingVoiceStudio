@@ -36,7 +36,7 @@ bool is_midi_file(const std::string &path) {
 const char *const kDefaultPhoneme = "AA";
 
 const NoteControl kNoteControls[] = {
-    {"volume", "Volume", 0, 127, "0 to 127"},
+    {"volume", "Volume", 0, 127, "0 to 127, a share of the track's volume: 127 is all of it"},
     {"color", "Colour", 0, 127, "0 to 127, brighter as it rises"},
     {"noise", "Noise", 0, 127, "0 to 127, the hiss in the voice"},
     {"breath", "Breath", 0, 127, "0 to 127, air in the tone"},
@@ -66,6 +66,7 @@ namespace {
 const int kVersion = 3;
 const char *const kFormat = "vocalwriter-studio";
 const char *const kClipKey = "vocalwriter-studio-notes";
+const char *const kTrackClipKey = "vocalwriter-studio-tracks";
 //: VocalWriter's own defaults for a reverb that is asked for but not given
 const Reverb kDefaultReverb{40, 24};
 const char *const kBadInNames = "\\/:*?\"<>|";
@@ -785,6 +786,27 @@ std::vector<Note> notes_from_clipboard(const std::string &text) {
     } catch (...) {
         return {};
     }
+}
+
+std::string tracks_to_clipboard(const std::vector<Track> &tracks) {
+    json arr = json::array();
+    for (const Track &t : tracks) arr.push_back(track_doc(t));
+    json doc;
+    doc[kTrackClipKey] = arr;
+    return doc.dump(1);
+}
+
+std::vector<Track> tracks_from_clipboard(const std::string &text) {
+    std::vector<Track> out;
+    try {
+        json doc = json::parse(text);
+        const json &arr = doc.at(kTrackClipKey);
+        for (size_t i = 0; i < arr.size(); ++i)
+            if (arr[i].is_object()) out.push_back(read_track(arr[i], i));
+    } catch (...) {
+        return {};
+    }
+    return out;
 }
 
 std::string song_fingerprint(const Song &song) { return song_doc(song).dump(); }
@@ -2064,6 +2086,20 @@ std::vector<int> text_shares(const std::vector<TextWord> &words, int count) {
     return share;
 }
 
+std::vector<std::string> word_texts(const std::string &word, const std::vector<std::string> &phonemes, int count) {
+    std::vector<std::string> out(size_t(std::max(count, 0)));
+    if (out.empty()) return out;
+    out[0] = word;
+    std::vector<std::string> sounds;
+    for (const std::string &p : phonemes)
+        if (p != kSyllableBreak) sounds.push_back(p);
+    // one syllable held over notes stays as an import leaves it
+    if (out.size() < 2 || syllabify(sounds).size() < 2 || word.empty() || word.back() == '-') return out;
+    out[0] += '-';
+    for (size_t i = 1; i + 1 < out.size(); ++i) out[i] = "-";
+    return out;
+}
+
 std::vector<std::pair<std::vector<std::string>, std::string>> text_on_notes(const std::vector<TextWord> &words,
                                                                             const std::vector<int> &shares,
                                                                             bool plain) {
@@ -2073,7 +2109,8 @@ std::vector<std::pair<std::vector<std::string>, std::string>> text_on_notes(cons
         int k = shares[i];
         auto groups = w.phonemes.empty() ? std::vector<std::vector<std::string>>(size_t(k), {kDefaultPhoneme})
                                          : word_on_notes(w.phonemes, w.pieces, k, plain);
-        for (size_t j = 0; j < groups.size(); ++j) out.push_back({groups[j], j == 0 ? w.word : ""});
+        auto texts = word_texts(w.word, w.phonemes, int(groups.size()));
+        for (size_t j = 0; j < groups.size(); ++j) out.push_back({groups[j], texts[j]});
     }
     return out;
 }

@@ -242,6 +242,12 @@ else()
   # the manifest for the common controls (v6) and DPI awareness: see app.rc
   enable_language(RC)
   list(APPEND APP_SOURCES src/app/app.rc)
+  # the version as Windows reads it (src/app/version.rc): four numbers, 0 for
+  # any SVS_VERSION leaves out
+  string(REPLACE "." ";" SVS_VERSION_NUMBERS "${SVS_VERSION}.0.0.0")
+  list(SUBLIST SVS_VERSION_NUMBERS 0 4 SVS_VERSION_NUMBERS)
+  string(REPLACE ";" "," SVS_VERSION_NUMBERS "${SVS_VERSION_NUMBERS}")
+  configure_file(src/app/svs_version.h.in ${CMAKE_BINARY_DIR}/svs_version.h @ONLY)
 endif()
 
 function(svs_executable name console)
@@ -258,6 +264,8 @@ function(svs_executable name console)
     add_executable(${name} ${APP_SOURCES})
   endif()
   if(WIN32)
+    # where svs_version.h is written, for src/app/version.rc
+    target_include_directories(${name} PRIVATE ${CMAKE_BINARY_DIR})
     target_link_libraries(${name} PRIVATE svs_core wx::core wx::base)
     target_link_options(${name} PRIVATE -static -static-libgcc -static-libstdc++)
     # where every function landed, so that a crash report's module+offset
