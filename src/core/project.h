@@ -488,9 +488,17 @@ void text_looked_up(std::vector<TextWord> &words);
 //: in order until they run out, the last on what is left, the rest on none.
 std::vector<int> text_shares(const std::vector<TextWord> &words, int count);
 
+//: The words to write on the `count` notes a word is laid on, as VocalWriter
+//: writes them: a "-" on every note but the last when it has several
+//: syllables ("many-", ""), which its sequencer sings with a word's inner
+//: consonant lengths; one syllable held over several as an import leaves it
+//: ("name", "", "").
+std::vector<std::string> word_texts(const std::string &word, const std::vector<std::string> &phonemes, int count);
+
 //: The phonemes and the word of each note the words go on, `shares` of
 //: them each (text_shares), laid out as word_on_notes does, `plain` as on
-//: import; a word with no phonemes sings kDefaultPhoneme.
+//: import, the words as word_texts writes them; a word with no phonemes
+//: sings kDefaultPhoneme.
 std::vector<std::pair<std::vector<std::string>, std::string>> text_on_notes(const std::vector<TextWord> &words,
                                                                             const std::vector<int> &shares,
                                                                             bool plain = false);

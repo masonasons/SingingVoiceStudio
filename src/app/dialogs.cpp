@@ -501,16 +501,17 @@ void AddWordDialog::build_rows(int select) {
     }
     std::string word = typed().first;
     auto groups = word_on_notes(phonemes_, pieces(), count_->GetValue(), studio_->plain_held());
+    auto texts = word_texts(word, phonemes_, int(groups.size()));
     double b = value_beats();
     rows_.clear();
     for (size_t i = 0; i < groups.size(); ++i) {
         if (existing_.empty()) {
-            rows_.push_back(Note(groups[i], pitch_, b, i == 0 ? word : ""));
+            rows_.push_back(Note(groups[i], pitch_, b, texts[i]));
             continue;
         }
         Note n = existing_[i];
         n.phonemes = groups[i];
-        n.word = i == 0 ? word : "";
+        n.word = texts[i];
         rows_.push_back(n);
     }
     sync();
