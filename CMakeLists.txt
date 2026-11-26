@@ -32,6 +32,8 @@ endif()
 
 set(SVS_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 set(SVS_VERSION "1.8")
+# where Help > Check for updates asks for the newest release (src/app/update.h)
+set(SVS_UPDATE_REPO "masonasons/SingingVoiceStudio" CACHE STRING "the GitHub repository whose releases are checked for updates")
 
 # -- VocalWriter's engine ----------------------------------------------------
 #
@@ -131,6 +133,8 @@ if(WIN32)
   set(wxUSE_LIBJPEG OFF CACHE INTERNAL "")
   set(wxUSE_LIBTIFF OFF CACHE INTERNAL "")
   set(wxUSE_LIBWEBP OFF CACHE INTERNAL "")
+  # what the update check asks GitHub through (src/app/update.cpp): WinHTTP
+  set(wxUSE_WEBREQUEST ON CACHE INTERNAL "")
   FetchContent_MakeAvailable(wxWidgets)
 else()
   # scripts/build_mac.sh builds a static wxWidgets into build-deps/wx; one
@@ -144,7 +148,7 @@ else()
   endif()
   execute_process(COMMAND ${WX_CONFIG} --static=yes --cxxflags
                   OUTPUT_VARIABLE WX_CXXFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(COMMAND ${WX_CONFIG} --static=yes --libs core,base
+  execute_process(COMMAND ${WX_CONFIG} --static=yes --libs core,base,net
                   OUTPUT_VARIABLE WX_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
   separate_arguments(WX_CXXFLAGS UNIX_COMMAND "${WX_CXXFLAGS}")
   separate_arguments(WX_LIBS_SPLIT UNIX_COMMAND "${WX_LIBS}")
@@ -234,7 +238,12 @@ set(APP_SOURCES
   src/app/widgets.cpp
   src/app/worker.cpp
   src/app/crash.cpp
+  src/app/update.cpp
 )
+# the version the update check compares with the newest release's, and where
+# it asks; on this file alone, so a new version recompiles only it
+set_property(SOURCE src/app/update.cpp APPEND PROPERTY COMPILE_DEFINITIONS
+             SVS_VERSION="${SVS_VERSION}" SVS_UPDATE_REPO="${SVS_UPDATE_REPO}")
 if(APPLE)
   list(APPEND APP_SOURCES src/app/announce_mac.mm)
 else()
@@ -266,7 +275,7 @@ function(svs_executable name console)
   if(WIN32)
     # where svs_version.h is written, for src/app/version.rc
     target_include_directories(${name} PRIVATE ${CMAKE_BINARY_DIR})
-    target_link_libraries(${name} PRIVATE svs_core wx::core wx::base)
+    target_link_libraries(${name} PRIVATE svs_core wx::net wx::core wx::base)
     target_link_options(${name} PRIVATE -static -static-libgcc -static-libstdc++)
     # where every function landed, so that a crash report's module+offset
     # lines can be traced to code (see src/app/crash.h)

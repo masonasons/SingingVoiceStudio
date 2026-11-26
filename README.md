@@ -477,6 +477,17 @@ MacinTalk generation whose files are not there while another's are; Messages
 says what is missing when the program starts. A track already sung by such a
 voice keeps it, marked "(not installed)", and says why when it is played.
 
+## Updates
+
+When the program starts it asks GitHub whether a newer release is out. A
+newer one is offered once, in a window of what is new in it, whose Download
+opens that release's zip, or on a Mac its disk image, in the browser; after
+that, starting says so only in Messages. Help > Check for updates asks
+again at any time and says what it found either way. Nothing is downloaded
+or installed by the program itself, and GitHub is told nothing but which
+version is asking. Settings > Check for updates at startup turns the check
+at starting off; the one on the Help menu still works.
+
 ## Build
 
 msys2's mingw64 GCC, CMake and Ninja. wxWidgets is fetched from GitHub and built
@@ -576,6 +587,13 @@ notarized when the repository has the signing secrets listed at the top of the
 workflow, and is otherwise signed ad hoc. Run by hand, from the Actions tab, the
 workflow builds both and keeps them as the run's artifacts without releasing.
 
+The update check (`src/app/update.cpp`) compares `SVS_VERSION` with the
+newest release's tag and looks among its files for
+`SingingVoiceStudio-<version>.zip` and
+`SingingVoiceStudio-<version>-macos-<arch>.dmg`, the names the workflow
+gives them. A fork can point it at its own releases with
+`-DSVS_UPDATE_REPO=owner/repository`.
+
 ## The keys
 
 As VocalWriter Studio's, plus a few. F1 lists them all in a window. On a Mac read Cmd for
@@ -649,7 +667,8 @@ svs --pronounce daisy bicycle
 src/app/       the window, the dialogs, the command line (studio.cpp is VocalWriter
                Studio's app/studio.py, method for method; widgets.h is the list
                that is wxListCtrl on Windows and a native table on macOS;
-               announce.cpp and announce_mac.mm speak to the screen reader)
+               announce.cpp and announce_mac.mm speak to the screen reader;
+               update.cpp asks GitHub for a newer release)
 src/core/      the song, projects, MIDI import, phonology, settings and recovery
 src/audio/     the mixer (VocalWriter Studio's ppc/engine.py), WAV, FLAC and Ogg Vorbis
                files (encode.cpp), the player

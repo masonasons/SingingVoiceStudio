@@ -54,6 +54,12 @@ struct Settings {
     //: the voices VocalWriter never finished are offered to choose as well
     //: (is_unfinished_vocalwriter_voice)
     bool show_unfinished_voices = false;
+    //: GitHub is asked for a newer release when the program starts
+    //: (app/update.h)
+    bool check_updates = true;
+    //: the newest version that check has offered: each is offered once at
+    //: starting, and after that only said in Messages
+    std::string update_offered;
     //: what Export audio or Export tracks wrote last: ".wav", ".flac" or ".ogg"
     std::string export_format = ".wav";
     //: the SoundFonts loaded in the Soundbank manager
