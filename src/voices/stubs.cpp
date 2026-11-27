@@ -90,6 +90,16 @@ std::unique_ptr<Family> make_prose_family() {
 }
 #endif
 
+#ifndef SVS_HAVE_TRUVOICE
+std::unique_ptr<Family> make_truvoice_family() {
+    const char *names[] = {"Peter", "Sidney", "Eager Eddie", "Deep Douglas", "Biff", "Grandpa Amos",
+                           "Melvin", "Alex", "Wanda", "Julia", "Frank"};
+    std::vector<VoiceEntry> v;
+    for (int i = 0; i < 11; ++i) v.push_back({kTruVoiceBase + i, std::string("TruVoice ") + names[i]});
+    return std::make_unique<Absent>("TruVoice", v);
+}
+#endif
+
 #ifndef SVS_HAVE_MICROSOFT
 std::unique_ptr<Family> make_microsoft_family() {
     const char *names[] = {"Sam", "Mike", "Mary"};

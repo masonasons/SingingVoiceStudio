@@ -35,6 +35,11 @@ It does not cover the synthesisers, which carry their own licences:
                                          carries, src/data/, which, like the firmware it is
                                          decompiled from, is Speech Plus's and Telesensory
                                          Systems'
+    third_party/opentv/                  OpenTV, the TruVoice decompilation
+                                         (github.com/RetroBunn/OpenTV), MIT; compiled into the
+                                         program with the 1997 English engine's tables,
+                                         lang/enu/data/engine.tvdata, which are Centigram's
+                                         and not under the MIT licence (see its NOTICE)
     third_party/nlohmann/                nlohmann/json, MIT
 
 The builds also link in libraries fetched while they build, each under its
@@ -118,4 +123,4 @@ does not contain:
 
 This is an interoperability and preservation project for speech synthesisers
 that current machines no longer run as they were. It is not affiliated with
-or endorsed by KAE Labs, Microsoft, or the owners of DECtalk.
+or endorsed by KAE Labs, Microsoft, Centigram, or the owners of DECtalk.

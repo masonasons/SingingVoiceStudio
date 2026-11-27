@@ -3,7 +3,7 @@
 VocalWriter Studio rebuilt in C++ and wxWidgets, with more singers in it, for
 Windows and macOS. The window, the menus, the keys, the dialogs, the messages
 and the project files are derived from VocalWriter Studio; what is new is that a track can be sung by any of
-nine synthesisers, or played by VocalWriter's own General MIDI instruments or
+ten synthesisers, or played by VocalWriter's own General MIDI instruments or
 by SoundFonts:
 
 | engine | voices | numbers | what it is |
@@ -17,6 +17,7 @@ by SoundFonts:
 | **BeSTspeech** | BeSTspeech 1 to 6 | 6000 - 6005 | Berkeley Speech Technologies' diphone synthesiser of HumanWare's Keynote GOLD, its 1995 English build reimplemented in C (github.com/Mudb0y/openbst), compiled in; its frames are laid out again to the notes, one pitch period at a time |
 | **Prose 2000** | Standard, Deep, High | 7000 - 7002 | Speech Plus's text-to-speech board of 1988, its v3.4.1 firmware decompiled into C with a model of its DSP (github.com/rommix0/prose2000_reborn), compiled in; its frames are laid out again to the notes and synthesised by its own frame builder and DSP model |
 | **SharpVox** | Paul, Beth, Chris, Deborah, Jack, Jess, John, Matt, Pirate, Tommy, Whisper | 8000 - 8010 | a Klatt formant synthesiser with DECtalk's phonemes (github.com/dectalk/SharpVoxTTS), compiled in and sung through its singing layer with the shared pitch curve in every frame |
+| **TruVoice** | Peter, Sidney, Eager Eddie, Deep Douglas, Biff, Grandpa Amos, Melvin, Alex, Wanda, Julia, Frank | 9000 - 9010 | Centigram's text-to-speech system, the voice of Microsoft Agent and a descendant of the Prose 2000, its 1997 English engine decompiled into C (github.com/RetroBunn/OpenTV), compiled in with its tables; its frames are laid out again to the notes and synthesised by its own synthesiser, each given its period: exactly, with the voice's own jitter, for the voices that creak (Grandpa Amos, Melvin, Alex, Frank), and to the whole sample, retuned afterwards, for the steady ones (not on macOS yet) |
 | **GM Soundbank** | the 128 General MIDI instruments and a drum kit | 100000 - 100127, 100128 | VocalWriter 2.0's own instrument bank and wavetable synthesiser, which played its MIDI tracks (see below) |
 | **SoundFonts** | every preset of each SoundFont (.sf2) loaded, up to a thousand | 101000 - 101999 for the first, 102000 - 102999 for the next, and so on | played by TinySoundFont (github.com/schellingb/TinySoundFont), compiled in (see below) |
 
@@ -50,9 +51,11 @@ inflection register every 32 samples, Microsoft's vocoder twenty pitch knots
 per acoustic unit, SharpVox a pitch in every 5 ms frame, BeSTspeech a pitch
 period in sixteenths of a sample on every one of its frames, Eloquence a whole
 period in every 5 ms frame and the Prose 2000 one in every 10 ms frame, both
-retuned to the curve afterwards. A phrase outside the notes an engine sings is
+retuned to the curve afterwards, and TruVoice a period in every 10 ms frame, to
+a 256th of a sample for the voices that creak, so that nothing is done to their
+sound after, and whole and retuned for the steady ones. A phrase outside the notes an engine sings is
 moved whole octaves into them: C1 - G5 on DECtalk, F1 - B5 on BeSTspeech, E1 -
-D6 on Eloquence, E1 - F#5 on the Prose 2000, G#1 - G5 on MacinTalk 3 and F#1 -
+D6 on Eloquence, E1 - F#5 on the Prose 2000, F1 - D6 on TruVoice, G#1 - G5 on MacinTalk 3 and F#1 -
 D6 on Apple's other engines. A new song, and one imported from MIDI,
 starts with the
 portamento and reverb VocalWriter's own songs have: a portamento of 40, and
@@ -393,8 +396,8 @@ again at once, as it is now.
 
 None of the synthesisers' data is in this program, apart from DECtalk on
 Windows and the SSI-263's phoneme ROM, which are compiled in. SharpVox needs no
-data at all, and BeSTspeech's tables, Eloquence's language and the Prose 2000's
-ROM are compiled in. The rest is looked for
+data at all, and BeSTspeech's tables, Eloquence's language, the Prose 2000's
+ROM and TruVoice's tables are compiled in. The rest is looked for
 beside the executable, the folder above it, the source tree, and `%SVS_DATA%`
 (on macOS also the bundle's `Contents/Resources` and the folder the `.app`
 sits in):
@@ -658,7 +661,7 @@ src/voices/    singer.h (what an engine is asked to do), the engines, the shared
                pitch curve; soundfont.cpp plays SoundFonts through TinySoundFont
 engine/        VocalWriter's synthesiser in C (VocalWriterC)
 third_party/   DECtalk, the SSI-263, Microsoft Sam's reconstruction, SharpVox,
-               BeSTspeech, Eloquence, the Prose 2000, nlohmann/json
+               BeSTspeech, Eloquence, the Prose 2000, TruVoice (OpenTV), nlohmann/json
 scripts/       the Windows build (build_all.ps1, build_dectalk.ps1) and the macOS
                build (build_mac.sh, build_dectalk_mac.sh)
 tests/engines/ a standalone sing test for each engine
@@ -674,5 +677,7 @@ HumanWare's (see its LICENSE), and Eloquence's US English, compiled in from
 OpenEVV, IBM's (see its NOTICE). Prose 2000 Reborn states no licence of its own
 and is used with its author's permission, and the Prose 2000's firmware and ROM
 data it is decompiled from are Speech Plus's and Telesensory Systems'.
+OpenTV, which TruVoice is compiled from, is MIT, but the 1997 English engine's
+tables it is compiled in with are Centigram's (see its NOTICE).
 Microsoft's voice files are Microsoft's
 and are not included.

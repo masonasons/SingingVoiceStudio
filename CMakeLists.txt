@@ -62,10 +62,12 @@ endif()
 # sources, and defines SVS_HAVE_<NAME> on it. An engine that is not there is
 # replaced by a stub that offers its voices and says it cannot sing them.
 # Eloquence keeps its memory below two gigabytes, which a Mac keeps for
-# itself, so a Mac goes without it.
+# itself, so a Mac goes without it. TruVoice is not built on a Mac yet:
+# OpenTV lays its tables out (tools/gen_data.py) for the object files of
+# Windows' toolchain.
 set(SVS_DEFAULT_ENGINES "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech;prose")
 if(NOT APPLE)
-  list(APPEND SVS_DEFAULT_ENGINES eloquence)
+  list(APPEND SVS_DEFAULT_ENGINES eloquence truvoice)
 endif()
 set(SVS_ENGINES "${SVS_DEFAULT_ENGINES}" CACHE STRING "the engines to build in")
 # A build folder made before the newer engines keeps the list it was made
@@ -74,7 +76,8 @@ set(SVS_ENGINES "${SVS_DEFAULT_ENGINES}" CACHE STRING "the engines to build in")
 if(SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft" OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk"
    OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox"
    OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech"
-   OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech;eloquence")
+   OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech;eloquence"
+   OR SVS_ENGINES STREQUAL "dectalk;ssi263;microsoft;macintalk;sharpvox;bestspeech;prose;eloquence")
   set(SVS_ENGINES "${SVS_DEFAULT_ENGINES}" CACHE STRING "the engines to build in" FORCE)
 endif()
 set(SVS_ENGINE_LIBS)

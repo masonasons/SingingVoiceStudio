@@ -15,7 +15,8 @@
 //     6000 -   6999   BeSTspeech
 //     7000 -   7999   Prose 2000
 //     8000 -   8999   SharpVox
-//     9000 -  99999   kept for engines still to come that sing
+//     9000 -   9999   TruVoice
+//    10000 -  99999   kept for engines still to come that sing
 //   100000 - 100999   the GM Soundbank: VocalWriter's own General MIDI
 //                     instruments (GMBank), 100000 + the GM program, and
 //                     100128 the drum kit
@@ -48,6 +49,7 @@ enum : int {
     kBestBase = 6000,
     kProseBase = 7000,
     kSharpVoxBase = 8000,
+    kTruVoiceBase = 9000,
     kGmBase = 100000,
     kSoundFontBase = 101000,
     kFamilySpan = 1000,
@@ -158,6 +160,7 @@ std::unique_ptr<Family> make_sharpvox_family();
 std::unique_ptr<Family> make_bestspeech_family();
 std::unique_ptr<Family> make_eloquence_family();
 std::unique_ptr<Family> make_prose_family();
+std::unique_ptr<Family> make_truvoice_family();
 std::unique_ptr<Family> make_gm_family();
 
 //: Where Panthera is, as the user has named it in the settings: NVDA's
