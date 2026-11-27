@@ -99,11 +99,13 @@ if [ ! -x "$WX/bin/wx-config" ] || [ "$(cat "$WX/.commit" 2>/dev/null)" != "$WX_
     # pcre, png, zlib, expat and the rest are submodules in a checkout
     git -C wxWidgets submodule update -q --init --recursive || die "could not fetch wxWidgets' submodules"
     rm -rf wx-build "$WX" && mkdir -p wx-build && cd wx-build
-    # only what the program uses, every library built in, nothing from Homebrew
+    # only what the program uses, every library built in, nothing from Homebrew;
+    # the update check's web requests go through the system's NSURLSession
     "../wxWidgets/configure" --prefix="$WX" --disable-shared \
         --with-osx_cocoa --with-macosx-version-min=$MIN --disable-sys-libs \
         --with-libpng=builtin --with-libjpeg=builtin --with-libtiff=builtin --with-zlib=builtin \
         --with-expat=builtin --with-regex=builtin --without-liblzma \
+        --enable-webrequest --without-libcurl \
         --disable-webview --disable-mediactrl --disable-stc --disable-html --disable-richtext \
         --disable-propgrid --disable-ribbon --disable-aui --disable-xrc --disable-debug \
         --disable-tests > configure.log 2>&1 || die "wxWidgets did not configure: see build-deps/wx-build/configure.log"

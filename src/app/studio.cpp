@@ -50,7 +50,7 @@ enum {
     ID_EXPORT_MIDI, ID_ADD_WORD_EXISTING, ID_OCTAVE_INSTRUMENTS, ID_ADD_TEXT, ID_REMOVE_VOLUMES,
     ID_TRACK_TRANSPOSE_UP, ID_TRACK_TRANSPOSE_DOWN, ID_TRACK_OCTAVE_UP, ID_TRACK_OCTAVE_DOWN, ID_SOUNDBANKS,
     ID_NOTE_TO_REST, ID_TRACK_LOUDER, ID_TRACK_QUIETER, ID_TRACK_PAN_LEFT, ID_TRACK_PAN_RIGHT,
-    ID_SHOW_UNFINISHED, ID_TRACK_CUT, ID_TRACK_COPY, ID_TRACK_PASTE,
+    ID_SHOW_UNFINISHED, ID_TRACK_CUT, ID_TRACK_COPY, ID_TRACK_PASTE, ID_CHECK_UPDATES, ID_CHECK_UPDATES_AT_START,
 };
 
 //: A beat is a quarter note, so a sixteenth is a quarter of a beat: the step
@@ -247,6 +247,15 @@ Studio::Studio(const std::string &path)
         p.swap(outside_waiting_);
         open_from_outside(p);
     });
+    // what GitHub answered, which waits as a file from outside does
+    Bind(wxEVT_IDLE, [this](wxIdleEvent &e) {
+        e.Skip();
+        if (!update_waiting_ || dialog_open()) return;
+        std::function<void()> tell;
+        tell.swap(update_waiting_);
+        tell();
+    });
+    if (settings_.check_updates) CallAfter([this] { check_for_updates(false); });
     if (!path.empty()) {
         // a song named on the command line, or opened from the desktop
         std::string p = path;
@@ -259,6 +268,7 @@ Studio::Studio(const std::string &path)
 
 Studio::~Studio() {
     wxTheApp->Unbind(wxEVT_ACTIVATE_APP, &Studio::on_app_activate, this);
+    if (update_check_) update_check_->abandon();
     if (worker_) worker_->close();
 }
 
@@ -481,6 +491,8 @@ void Studio::build_menu() {
 
     wxMenu *help = new wxMenu();
     help->Append(ID_KEYS, K("&Keys\tF1"), "List every shortcut");
+    help->AppendSeparator();
+    help->Append(ID_CHECK_UPDATES, "Check for &updates...", "Ask GitHub whether a newer Singing Voice Studio is out");
 
     wxMenu *edit = new wxMenu();
     mi_undo_ = edit->Append(wxID_UNDO, K("&Undo\tCtrl+Z"), "Undo the last song edit");
@@ -536,6 +548,10 @@ void Studio::build_menu() {
         "Offer Miles, Ellen1, Kae1, Sonny1, Ed1 and Cellos, which VocalWriter never finished, in the track "
         "settings and controllers too");
     mi_show_unfinished_->Check(settings_.show_unfinished_voices);
+    mi_check_updates_ = prefs->AppendCheckItem(ID_CHECK_UPDATES_AT_START, "Check for updates at s&tartup",
+                                               "Ask GitHub for a newer Singing Voice Studio whenever the program "
+                                               "starts, and offer each new one once");
+    mi_check_updates_->Check(settings_.check_updates);
     prefs->Append(ID_PANTHERA, K("Panthera &folder..."), "Where to find Panthera, for the MacinTalk voices");
     prefs->Append(ID_SOUNDBANKS, K("Sound&bank manager...\tCtrl+Shift+K"),
                   "Load SoundFonts to play with, and choose what plays the parts of an imported song that are not sung");
@@ -615,6 +631,8 @@ void Studio::build_menu() {
     on(ID_OCTAVE_INSTRUMENTS, &Studio::on_octave_instruments);
     on(ID_FOLLOW, &Studio::on_follow);
     on(ID_SHOW_UNFINISHED, &Studio::on_show_unfinished);
+    on(ID_CHECK_UPDATES_AT_START, &Studio::on_check_updates_at_start);
+    Bind(wxEVT_MENU, [this](wxCommandEvent &) { check_for_updates(true); }, ID_CHECK_UPDATES);
     Bind(wxEVT_MENU, [this](wxCommandEvent &) { Close(); }, wxID_EXIT);
 }
 
@@ -813,6 +831,17 @@ void Studio::on_show_unfinished(wxCommandEvent &) {
     say(wxString(on ? "VocalWriter's unfinished voices, Miles, Ellen1, Kae1, Sonny1, Ed1 and Cellos, are offered "
                       "with the others"
                     : "VocalWriter's unfinished voices are hidden") +
+        (kept ? "" : ", for this sitting only: the settings file could not be written"));
+}
+
+//: A setting of the program too: whether GitHub is asked for a newer
+//: release whenever the program starts.
+void Studio::on_check_updates_at_start(wxCommandEvent &) {
+    bool on = mi_check_updates_->IsChecked();
+    settings_.check_updates = on;
+    bool kept = save_settings(settings_);
+    say(wxString(on ? "GitHub is asked for a newer version whenever the program starts"
+                    : "updates are checked for only from the Help menu") +
         (kept ? "" : ", for this sitting only: the settings file could not be written"));
 }
 
@@ -3000,6 +3029,94 @@ void Studio::offer_recovery() {
     int notes_n = 0;
     for (const Track &t : song_.tracks) notes_n += int(t.notes.size());
     say(W("recovered " + std::to_string(notes_n) + " notes" + from + ". Save it somewhere before going on."));
+}
+
+void Studio::check_for_updates(bool asked) {
+    if (asked) {
+        update_asked_ = true;
+        say("checking for updates");
+    }
+    if (update_check_) return;   // already on its way, and it answers for both
+    update_check_ = UpdateCheck::start([this](const UpdateAnswer &a) {
+        update_check_ = nullptr;
+        updates_answered(a);
+    });
+}
+
+//: Said in Messages whatever the answer. A window is shown, once no dialog
+//: is in front, for every answer to a check from the Help menu, and at
+//: starting for a newer version not offered before.
+void Studio::updates_answered(const UpdateAnswer &a) {
+    bool asked = update_asked_;
+    update_asked_ = false;
+    // The answer comes in just after the window's idle time, so an idle is
+    // asked for: in a window left alone, nothing else would bring one, and
+    // the answer would wait for the next key pressed.
+    auto when_free = [this](std::function<void()> tell) {
+        update_waiting_ = std::move(tell);
+        wxWakeUpIdle();
+    };
+    std::string have = program_version();
+    if (!a.ok) {
+        say(W("could not check for updates: " + a.error));
+        if (asked)
+            when_free([this, a] {
+                critical_stop();
+                wxMessageBox(W("Could not check for updates: " + a.error + "."), kAppName, wxOK | wxICON_ERROR, this);
+            });
+        return;
+    }
+    if (!a.newer) {
+        std::string said = "Singing Voice Studio " + have + " is the newest version";
+        say(W(said));
+        if (asked) when_free([this, said] { wxMessageBox(W(said + "."), kAppName, wxOK | wxICON_INFORMATION, this); });
+        return;
+    }
+    say(W("Singing Voice Studio " + a.latest.version + " is out, and this is " + have +
+          ": Check for updates, on the Help menu, offers it"));
+    if (!asked && settings_.update_offered == a.latest.version) return;
+    settings_.update_offered = a.latest.version;
+    save_settings(settings_);
+    Release r = a.latest;
+    when_free([this, r] { offer_update(r); });
+}
+
+//: What is new in a newer release, and its file, opened in the browser to
+//: download. Without a file for this system, the release's page instead.
+void Studio::offer_update(const Release &r) {
+    std::string is_out = "Singing Voice Studio " + r.version + " is out";
+    wxDialog dlg(this, wxID_ANY, W(is_out), wxDefaultPosition, wxDefaultSize,
+                 wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+    wxBoxSizer *outer = new wxBoxSizer(wxVERTICAL);
+    outer->Add(new wxStaticText(&dlg, wxID_ANY, W(is_out + ", and this is " + program_version() + ".")), 0,
+               wxALL, 8);
+    std::string what = r.notes.empty() ? "The release says nothing of what is new." : r.notes;
+    wxTextCtrl *notes = new wxTextCtrl(&dlg, wxID_ANY, W(what), wxDefaultPosition, wxSize(560, 300),
+                                       wxTE_MULTILINE | wxTE_READONLY);
+    labelled(&dlg, outer, "What is new", notes, 1);
+    wxBoxSizer *buttons = new wxBoxSizer(wxHORIZONTAL);
+    wxButton *get = new wxButton(&dlg, wxID_OK, r.download.empty() ? "Open the release &page" : "&Download");
+    buttons->Add(get, 0, wxRIGHT, 8);
+    buttons->Add(new wxButton(&dlg, wxID_CANCEL, "&Not now"));
+    outer->Add(buttons, 0, wxALIGN_RIGHT | wxALL, 8);
+    get->SetDefault();
+    dlg.SetEscapeId(wxID_CANCEL);
+    dlg.SetSizerAndFit(outer);
+    // where the focus goes, so what is new is read the moment it opens
+    notes->SetFocus();
+    notes->SetInsertionPoint(0);
+    exclaim();
+    if (dlg.ShowModal() != wxID_OK) return;
+    const std::string &url = r.download.empty() ? r.page : r.download;
+    if (wxLaunchDefaultBrowser(W(url))) {
+        say(W(r.download.empty() ? "the release's page opened in the browser"
+                                 : "Singing Voice Studio " + r.version + " is downloading in the browser"));
+        return;
+    }
+    std::string said = "The browser could not be opened. Singing Voice Studio " + r.version + " is at " + url;
+    say(W(said));
+    critical_stop();
+    wxMessageBox(W(said), kAppName, wxOK | wxICON_ERROR, this);
 }
 
 //: Ask before throwing away unsaved work. True to go ahead.

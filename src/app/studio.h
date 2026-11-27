@@ -22,6 +22,7 @@
 
 class wxProgressDialog;
 
+#include "app/update.h"
 #include "app/widgets.h"
 #include "app/worker.h"
 #include "audio/mixer.h"
@@ -229,6 +230,7 @@ private:
     void on_octave_instruments(wxCommandEvent &);
     void on_show_unfinished(wxCommandEvent &);
     void on_follow(wxCommandEvent &);
+    void on_check_updates_at_start(wxCommandEvent &);
     void follow();
     void preview_note(int i);
     void preview_now(int i);
@@ -268,6 +270,14 @@ private:
     void write_copy();
     void offer_recovery();
     bool may_discard(const wxString &what);
+
+    // -- updates ----------------------------------------------------------
+    //: Ask GitHub for a newer release. `asked`: from the Help menu, so every
+    //: answer is told in a window; otherwise, at starting, only a version
+    //: not offered before is.
+    void check_for_updates(bool asked);
+    void updates_answered(const UpdateAnswer &a);
+    void offer_update(const Release &r);
     void take(const Song &song, const std::string &path);
     void on_new(wxCommandEvent &);
     void on_open(wxCommandEvent &);
@@ -311,6 +321,12 @@ private:
     std::string path_;
     //: a file opened from outside while a dialog was open, waiting for it to close
     std::string outside_waiting_;
+    //: the question to GitHub on its way, if one is, and whether it was
+    //: asked from the Help menu
+    UpdateCheck *update_check_ = nullptr;
+    bool update_asked_ = false;
+    //: what GitHub answered, to be told once no dialog is open
+    std::function<void()> update_waiting_;
     bool dirty_ = false;
     Settings settings_;
     wxTimer preview_timer_, recovery_timer_, follow_timer_, export_timer_;
@@ -355,6 +371,7 @@ private:
     wxMenuItem *mi_octave_instruments_ = nullptr;
     wxMenuItem *mi_follow_ = nullptr;
     wxMenuItem *mi_show_unfinished_ = nullptr;
+    wxMenuItem *mi_check_updates_ = nullptr;
     wxMenuItem *mi_undo_ = nullptr;
     wxMenuItem *mi_redo_ = nullptr;
     bool relabel_pending_ = false;
